@@ -57,16 +57,19 @@ export default async function PainelPage() {
           </div>
         )}
 
-        <div className="mt-6 rounded-xl bg-[#f6f4ee] p-3 text-sm text-[#5b6b5c]">
-          Esta é a base da Fase 1: login funcionando e cada pessoa vendo seu
-          próprio papel no sistema. As telas de verdade (produtos, pedidos,
-          etc.) entram nas próximas fases.
-        </div>
+        {["admin", "gerente"].includes(papel) && (
+          <Link
+            href="/painel/produtos"
+            className="mt-6 block w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#195c33]"
+          >
+            Cardápio (categorias e produtos)
+          </Link>
+        )}
 
         {papel === "admin" && (
           <Link
             href="/painel/funcionarios"
-            className="mt-6 block w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#195c33]"
+            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
           >
             Gerenciar funcionários
           </Link>

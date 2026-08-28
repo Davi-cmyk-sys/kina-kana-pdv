@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { sair } from "./actions";
@@ -62,7 +63,16 @@ export default async function PainelPage() {
           etc.) entram nas próximas fases.
         </div>
 
-        <form action={sair} className="mt-6">
+        {papel === "admin" && (
+          <Link
+            href="/painel/funcionarios"
+            className="mt-6 block w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#195c33]"
+          >
+            Gerenciar funcionários
+          </Link>
+        )}
+
+        <form action={sair} className="mt-3">
           <button
             type="submit"
             className="w-full rounded-lg border border-[#dcdfd2] px-4 py-2 text-sm font-semibold text-[#1c2a1f] transition hover:bg-[#f6f4ee]"

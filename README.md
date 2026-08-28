@@ -2,16 +2,17 @@
 
 Sistema de balcão da Kina Kana Pastelaria — reconstrução em Next.js + Supabase + Vercel, feita em etapas pequenas e testadas.
 
-## Estado atual: Fase 0 — base conectada
+## Estado atual: Fase 1 — login e usuários (em andamento)
 
-Esta versão ainda **não é o sistema de verdade**. É só uma página de teste que prova que quatro peças estão conectadas entre si:
+- ✅ **Fase 0** — Next.js + Supabase + GitHub + Vercel comprovadamente conectados.
+- 🚧 **Fase 1** — login com Supabase Auth, papéis (admin/gerente/caixa/cozinha/entregador) e proteção de rotas.
 
-1. **Next.js** — o código roda e monta a página.
-2. **Supabase** — o banco de dados na nuvem, lido pela página.
-3. **GitHub** — onde este código fica salvo e versionado.
-4. **Vercel** — onde o site fica publicado, atualizado a cada push no GitHub.
+Telas desta fase:
 
-Se a página mostrar "Conectado ao Supabase" com uma mensagem, a Fase 0 está completa e podemos seguir para construir as telas reais do PDV.
+- `/login` — entrar com e-mail e senha.
+- `/painel` — página protegida, mostra o nome e o papel de quem está logado, com botão de sair.
+
+Toda rota (exceto `/login`) exige estar logado — quem não está é redirecionado automaticamente pelo `proxy.js`.
 
 ## Rodar localmente
 

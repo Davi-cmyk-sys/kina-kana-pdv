@@ -68,6 +68,15 @@ export default async function PainelPage() {
 
         {["admin", "gerente"].includes(papel) && (
           <Link
+            href="/painel/pedidos"
+            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
+          >
+            Pedidos
+          </Link>
+        )}
+
+        {["admin", "gerente"].includes(papel) && (
+          <Link
             href="/painel/produtos"
             className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
           >

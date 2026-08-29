@@ -1,0 +1,150 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { apagarPedido } from "./actions";
+import BotaoApagar from "@/components/BotaoApagar";
+
+const NOMES_STATUS = {
+  aberto: "Aberto",
+  pago: "Pago",
+  em_preparo: "Em preparo",
+  pronto: "Pronto",
+  entregue: "Entregue",
+  cancelado: "Cancelado",
+};
+
+export default async function PedidosPage({ searchParams }) {
+  const params = await searchParams;
+  const erro = typeof params?.erro === "string" ? params.erro : null;
+  const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: meuPerfil } = await supabase
+    .from("perfis")
+    .select("papel")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const podeGerenciar = ["admin", "gerente"].includes(meuPerfil?.papel);
+
+  if (!podeGerenciar) {
+    redirect("/painel");
+  }
+
+  const { data: pedidos } = await supabase
+    .from("pedidos")
+    .select("id, numero_senha, data_referencia, status, total, criado_em")
+    .order("criado_em", { ascending: false });
+
+  const { data: itens } = await supabase
+    .from("itens_pedido")
+    .select("pedido_id, nome_snapshot, quantidade");
+
+  const formatoMoeda = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const formatoData = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <div className="min-h-screen bg-[#f6f4ee] p-6">
+      <main className="mx-auto w-full max-w-2xl rounded-2xl border border-[#dcdfd2] bg-white p-8 shadow-sm">
+        <Link
+          href="/painel"
+          className="text-sm font-medium text-[#1f6f3e] hover:underline"
+        >
+          ← Voltar ao painel
+        </Link>
+
+        <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-[#1f6f3e]">
+          Kina Kana PDV
+        </p>
+        <h1 className="mt-1 text-2xl font-bold text-[#1c2a1f]">Pedidos</h1>
+        <p className="mt-1 text-sm text-[#5b6b5c]">
+          Todos os pedidos abertos no sistema. Dá pra apagar um pedido daqui
+          (útil pra limpar pedidos de teste).
+        </p>
+
+        {erro && (
+          <div className="mt-4 rounded-lg bg-[#fbeae6] p-3 text-sm text-[#8a3320]">
+            {erro}
+          </div>
+        )}
+        {sucesso && (
+          <div className="mt-4 rounded-lg bg-[#e7f2ea] p-3 text-sm text-[#1f6f3e]">
+            {sucesso}
+          </div>
+        )}
+
+        <div className="mt-6 space-y-3">
+          {!pedidos?.length ? (
+            <p className="text-sm text-[#8b968a]">
+              Nenhum pedido aberto ainda.
+            </p>
+          ) : (
+            pedidos.map((pedido) => {
+              const itensDoPedido = itens?.filter(
+                (i) => i.pedido_id === pedido.id
+              );
+              return (
+                <div
+                  key={pedido.id}
+                  className="rounded-xl border border-[#dcdfd2] p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1c2a1f]">
+                        Pedido nº {pedido.numero_senha}
+                      </p>
+                      <p className="text-xs text-[#8b968a]">
+                        {formatoData.format(new Date(pedido.criado_em))}
+                      </p>
+                      <span className="mt-1 inline-block rounded-full bg-[#f6f4ee] px-2 py-0.5 text-xs font-semibold text-[#1c2a1f]">
+                        {NOMES_STATUS[pedido.status] ?? pedido.status}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-[#1c2a1f]">
+                        {formatoMoeda.format(pedido.total)}
+                      </p>
+                      <BotaoApagar
+                        acao={apagarPedido}
+                        campos={{ id: pedido.id }}
+                        confirmacao={`Apagar o pedido nº ${pedido.numero_senha}?`}
+                        className="mt-1 text-xs font-medium text-[#b3432f] hover:underline"
+                      />
+                    </div>
+                  </div>
+
+                  {itensDoPedido?.length > 0 && (
+                    <div className="mt-2 border-t border-[#eceae0] pt-2">
+                      {itensDoPedido.map((item, idx) => (
+                        <p key={idx} className="text-xs text-[#5b6b5c]">
+                          {item.quantidade}x {item.nome_snapshot}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { criarAdicional, criarCombo, adicionarItemCombo } from "./actions";
+import {
+  criarAdicional,
+  criarCombo,
+  adicionarItemCombo,
+  apagarAdicional,
+  apagarCombo,
+  apagarItemCombo,
+} from "./actions";
+import BotaoApagar from "@/components/BotaoApagar";
 
 const campoClasse =
   "mt-1 w-full rounded-lg border border-[#dcdfd2] px-3 py-2 text-sm text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]";
@@ -157,9 +165,17 @@ export default async function CombosPage({ searchParams }) {
                 <p className="text-sm font-semibold text-[#1c2a1f]">
                   {a.nome}
                 </p>
-                <p className="text-sm text-[#1c2a1f]">
-                  {formatoMoeda.format(a.preco)}
-                </p>
+                <div className="text-right">
+                  <p className="text-sm text-[#1c2a1f]">
+                    {formatoMoeda.format(a.preco)}
+                  </p>
+                  <BotaoApagar
+                    acao={apagarAdicional}
+                    campos={{ id: a.id }}
+                    confirmacao={`Apagar o adicional "${a.nome}"?`}
+                    className="text-xs font-medium text-[#b3432f] hover:underline"
+                  />
+                </div>
               </div>
             ))
           )}
@@ -281,6 +297,12 @@ export default async function CombosPage({ searchParams }) {
                       <p className="text-xs text-[#8b968a]">
                         custo {formatoMoeda.format(combo.custo)}
                       </p>
+                      <BotaoApagar
+                        acao={apagarCombo}
+                        campos={{ id: combo.id }}
+                        confirmacao={`Apagar o combo "${combo.nome}" e todos os itens dele?`}
+                        className="text-xs font-medium text-[#b3432f] hover:underline"
+                      />
                     </div>
                   </div>
 
@@ -292,13 +314,25 @@ export default async function CombosPage({ searchParams }) {
                       </p>
                     ) : (
                       itensDoCombo.map((item) => (
-                        <p key={item.id} className="text-xs text-[#5b6b5c]">
-                          {item.quantidade}x{" "}
-                          {item.produtos
-                            ? item.produtos.nome
-                            : `escolha em "${item.categorias?.icone ? item.categorias.icone + " " : ""}${item.categorias?.nome}"`}
-                          {item.rotulo ? ` — ${item.rotulo}` : ""}
-                        </p>
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between gap-2"
+                        >
+                          <p className="text-xs text-[#5b6b5c]">
+                            {item.quantidade}x{" "}
+                            {item.produtos
+                              ? item.produtos.nome
+                              : `escolha em "${item.categorias?.icone ? item.categorias.icone + " " : ""}${item.categorias?.nome}"`}
+                            {item.rotulo ? ` — ${item.rotulo}` : ""}
+                          </p>
+                          <BotaoApagar
+                            acao={apagarItemCombo}
+                            campos={{ id: item.id }}
+                            confirmacao="Remover este item do combo?"
+                            className="text-xs font-medium text-[#b3432f] hover:underline"
+                            texto="remover"
+                          />
+                        </div>
                       ))
                     )}
                   </div>

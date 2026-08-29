@@ -103,3 +103,53 @@ export async function adicionarItemCombo(formData) {
 
   comSucesso("Item adicionado ao combo.");
 }
+
+export async function apagarAdicional(formData) {
+  const id = formData.get("id")?.toString();
+  if (!id) comErro("Adicional inválido.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("adicionais").delete().eq("id", id);
+
+  if (error) {
+    comErro(
+      error.code === "23503"
+        ? "Esse adicional está sendo usado em algum pedido, então não pode ser apagado."
+        : mensagemDoErro(error)
+    );
+  }
+
+  comSucesso("Adicional apagado.");
+}
+
+export async function apagarCombo(formData) {
+  const id = formData.get("id")?.toString();
+  if (!id) comErro("Combo inválido.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("combos").delete().eq("id", id);
+
+  if (error) {
+    comErro(
+      error.code === "23503"
+        ? "Esse combo está sendo usado em algum pedido, então não pode ser apagado."
+        : mensagemDoErro(error)
+    );
+  }
+
+  comSucesso("Combo apagado.");
+}
+
+export async function apagarItemCombo(formData) {
+  const id = formData.get("id")?.toString();
+  if (!id) comErro("Item inválido.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("combo_itens").delete().eq("id", id);
+
+  if (error) {
+    comErro(mensagemDoErro(error));
+  }
+
+  comSucesso("Item removido do combo.");
+}

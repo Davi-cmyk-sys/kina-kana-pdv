@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { criarCategoria, criarProduto, apagarProduto, apagarCategoria } from "./actions";
-import BotaoApagar from "./BotaoApagar";
+import BotaoApagar from "@/components/BotaoApagar";
 
 const campoClasse =
   "mt-1 w-full rounded-lg border border-[#dcdfd2] px-3 py-2 text-sm text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]";
@@ -241,7 +241,7 @@ export default async function ProdutosPage({ searchParams }) {
                   </h2>
                   <BotaoApagar
                     acao={apagarCategoria}
-                    id={categoria.id}
+                    campos={{ id: categoria.id }}
                     confirmacao={`Apagar a categoria "${categoria.nome}"? Isso só funciona se ela não tiver produtos dentro.`}
                     className="text-xs font-medium text-[#b3432f] hover:underline"
                   />
@@ -275,7 +275,7 @@ export default async function ProdutosPage({ searchParams }) {
                           </p>
                           <BotaoApagar
                             acao={apagarProduto}
-                            id={produto.id}
+                            campos={{ id: produto.id }}
                             confirmacao={`Apagar o produto "${produto.nome}"?`}
                             className="mt-1 text-xs font-medium text-[#b3432f] hover:underline"
                           />

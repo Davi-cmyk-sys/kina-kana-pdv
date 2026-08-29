@@ -66,6 +66,15 @@ export default async function PainelPage() {
           </Link>
         )}
 
+        {["admin", "gerente"].includes(papel) && (
+          <Link
+            href="/painel/combos"
+            className="mt-3 block w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#195c33]"
+          >
+            Combos e adicionais
+          </Link>
+        )}
+
         {papel === "admin" && (
           <Link
             href="/painel/funcionarios"

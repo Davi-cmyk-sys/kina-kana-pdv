@@ -86,3 +86,51 @@ export async function criarProduto(formData) {
 
   comSucesso(`Produto "${nome}" cadastrado.`);
 }
+
+export async function apagarProduto(formData) {
+  const id = formData.get("id")?.toString();
+  if (!id) {
+    comErro("Produto inválido.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("produtos").delete().eq("id", id);
+
+  if (error) {
+    if (error.code === "42501") {
+      comErro("Só admin ou gerente podem apagar produtos.");
+    }
+    if (error.code === "23503") {
+      comErro(
+        "Esse produto está sendo usado em um combo ou pedido, então não pode ser apagado. Marque como indisponível em vez disso, se quiser."
+      );
+    }
+    comErro(error.message);
+  }
+
+  comSucesso("Produto apagado.");
+}
+
+export async function apagarCategoria(formData) {
+  const id = formData.get("id")?.toString();
+  if (!id) {
+    comErro("Categoria inválida.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("categorias").delete().eq("id", id);
+
+  if (error) {
+    if (error.code === "42501") {
+      comErro("Só admin ou gerente podem apagar categorias.");
+    }
+    if (error.code === "23503") {
+      comErro(
+        "Essa categoria tem produtos cadastrados dentro dela — apague os produtos primeiro."
+      );
+    }
+    comErro(error.message);
+  }
+
+  comSucesso("Categoria apagada.");
+}

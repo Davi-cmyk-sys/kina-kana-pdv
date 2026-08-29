@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { criarCategoria, criarProduto } from "./actions";
+import { criarCategoria, criarProduto, apagarProduto, apagarCategoria } from "./actions";
+import BotaoApagar from "./BotaoApagar";
 
 const campoClasse =
   "mt-1 w-full rounded-lg border border-[#dcdfd2] px-3 py-2 text-sm text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]";
@@ -230,13 +231,21 @@ export default async function ProdutosPage({ searchParams }) {
             );
             return (
               <div key={categoria.id}>
-                <h2 className="text-sm font-semibold text-[#1c2a1f]">
-                  {categoria.icone ? `${categoria.icone} ` : ""}
-                  {categoria.nome}{" "}
-                  <span className="font-normal text-[#8b968a]">
-                    ({produtosDaCategoria?.length ?? 0})
-                  </span>
-                </h2>
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-[#1c2a1f]">
+                    {categoria.icone ? `${categoria.icone} ` : ""}
+                    {categoria.nome}{" "}
+                    <span className="font-normal text-[#8b968a]">
+                      ({produtosDaCategoria?.length ?? 0})
+                    </span>
+                  </h2>
+                  <BotaoApagar
+                    acao={apagarCategoria}
+                    id={categoria.id}
+                    confirmacao={`Apagar a categoria "${categoria.nome}"? Isso só funciona se ela não tiver produtos dentro.`}
+                    className="text-xs font-medium text-[#b3432f] hover:underline"
+                  />
+                </div>
 
                 {!produtosDaCategoria?.length ? (
                   <p className="mt-2 text-sm text-[#8b968a]">
@@ -264,6 +273,12 @@ export default async function ProdutosPage({ searchParams }) {
                           <p className="font-semibold text-[#1c2a1f]">
                             {formatoMoeda.format(produto.preco)}
                           </p>
+                          <BotaoApagar
+                            acao={apagarProduto}
+                            id={produto.id}
+                            confirmacao={`Apagar o produto "${produto.nome}"?`}
+                            className="mt-1 text-xs font-medium text-[#b3432f] hover:underline"
+                          />
                           <p className="text-xs text-[#8b968a]">
                             custo {formatoMoeda.format(produto.custo)}
                           </p>

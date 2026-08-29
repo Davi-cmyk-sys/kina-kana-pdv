@@ -57,10 +57,19 @@ export default async function PainelPage() {
           </div>
         )}
 
+        {["admin", "gerente", "caixa"].includes(papel) && (
+          <Link
+            href="/painel/pedido"
+            className="mt-6 block w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#195c33]"
+          >
+            Novo Pedido
+          </Link>
+        )}
+
         {["admin", "gerente"].includes(papel) && (
           <Link
             href="/painel/produtos"
-            className="mt-6 block w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#195c33]"
+            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
           >
             Cardápio (categorias e produtos)
           </Link>
@@ -69,7 +78,7 @@ export default async function PainelPage() {
         {["admin", "gerente"].includes(papel) && (
           <Link
             href="/painel/combos"
-            className="mt-3 block w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#195c33]"
+            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
           >
             Combos e adicionais
           </Link>

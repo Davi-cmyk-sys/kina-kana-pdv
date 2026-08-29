@@ -12,9 +12,22 @@ function subtotalDoItem(item) {
   return item.preco * item.quantidade + totalAdicionais;
 }
 
-export async function criarPedido({ itens, desconto }) {
+const FORMAS_VALIDAS = [
+  "dinheiro",
+  "pix",
+  "credito",
+  "debito",
+  "vale_refeicao",
+  "vale_alimentacao",
+  "outros",
+];
+
+export async function criarPedido({ itens, desconto, pagamento }) {
   if (!itens || itens.length === 0) {
     return { erro: "O carrinho está vazio." };
+  }
+  if (!pagamento?.forma || !FORMAS_VALIDAS.includes(pagamento.forma)) {
+    return { erro: "Escolha a forma de pagamento." };
   }
 
   try {
@@ -65,6 +78,12 @@ export async function criarPedido({ itens, desconto }) {
     }
     const total = Math.max(subtotal - valorDesconto, 0);
 
+    const recebido = Number(pagamento.recebido) || 0;
+    const troco =
+      pagamento.forma === "dinheiro" && recebido > total
+        ? recebido - total
+        : 0;
+
     const { data: pedido, error: erroPedido } = await supabase
       .from("pedidos")
       .insert({
@@ -77,6 +96,8 @@ export async function criarPedido({ itens, desconto }) {
         desconto_autorizado_por:
           valorDesconto > 0 ? desconto.autorizadoPorId : null,
         total,
+        status: "pago",
+        pago_em: new Date().toISOString(),
       })
       .select("id, numero_senha")
       .single();
@@ -139,7 +160,23 @@ export async function criarPedido({ itens, desconto }) {
       }
     }
 
-    return { sucesso: true, numeroSenha: pedido.numero_senha };
+    const { error: erroPagamento } = await supabase.from("pagamentos").insert({
+      pedido_id: pedido.id,
+      forma: pagamento.forma,
+      valor: total,
+      troco,
+      registrado_por: user.id,
+    });
+
+    if (erroPagamento) {
+      return {
+        erro:
+          "O pedido foi criado, mas houve um erro ao registrar o pagamento: " +
+          erroPagamento.message,
+      };
+    }
+
+    return { sucesso: true, numeroSenha: pedido.numero_senha, troco };
   } catch (err) {
     console.error("Erro ao criar pedido:", err);
     return {

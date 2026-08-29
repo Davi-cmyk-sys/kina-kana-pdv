@@ -46,6 +46,10 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
   const [erroAutorizacao, setErroAutorizacao] = useState(null);
   const [autorizando, setAutorizando] = useState(false);
 
+  // ---------- pagamento ----------
+  const [formaPagamento, setFormaPagamento] = useState("dinheiro");
+  const [recebidoTexto, setRecebidoTexto] = useState("");
+
   const produtosDaCategoria = useMemo(
     () =>
       abaAtiva && abaAtiva !== "combos"
@@ -208,22 +212,32 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
     setErroAutorizacao(null);
   }
 
+  const recebido = Number(recebidoTexto.replace(",", "."));
+  const trocoPrevisto =
+    formaPagamento === "dinheiro" && recebido > total ? recebido - total : 0;
+
   function finalizar() {
     setMensagem(null);
     startTransition(async () => {
       const resultado = await criarPedido({
         itens: carrinho,
         desconto: descontoAutorizado,
+        pagamento: { forma: formaPagamento, recebido: recebidoTexto || null },
       });
       if (resultado?.erro) {
         setMensagem({ tipo: "erro", texto: resultado.erro });
       } else {
         setMensagem({
           tipo: "sucesso",
-          texto: `Pedido nº ${resultado.numeroSenha} aberto com sucesso!`,
+          texto:
+            `Pedido nº ${resultado.numeroSenha} pago com sucesso!` +
+            (resultado.troco > 0
+              ? ` Troco: ${formatoMoeda.format(resultado.troco)}`
+              : ""),
         });
         setCarrinho([]);
         removerDesconto();
+        setRecebidoTexto("");
       }
     });
   }
@@ -568,13 +582,56 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
           </div>
         </div>
 
+        {/* Pagamento */}
+        <div className="mt-4 rounded-lg border border-[#dcdfd2] p-3">
+          <p className="text-xs font-semibold text-[#1c2a1f]">
+            Forma de pagamento
+          </p>
+          <select
+            value={formaPagamento}
+            onChange={(e) => setFormaPagamento(e.target.value)}
+            className={campoClasse}
+          >
+            <option value="dinheiro">Dinheiro</option>
+            <option value="pix">Pix</option>
+            <option value="credito">Cartão de crédito</option>
+            <option value="debito">Cartão de débito</option>
+            <option value="vale_refeicao">Vale-refeição</option>
+            <option value="vale_alimentacao">Vale-alimentação</option>
+            <option value="outros">Outros</option>
+          </select>
+
+          {formaPagamento === "dinheiro" && (
+            <div className="mt-2">
+              <label className="block text-xs font-medium text-[#1c2a1f]">
+                Valor recebido (opcional, pra calcular o troco)
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={recebidoTexto}
+                onChange={(e) => setRecebidoTexto(e.target.value)}
+                className={campoClasse}
+                placeholder={formatoMoeda.format(total)}
+              />
+              {trocoPrevisto > 0 && (
+                <p className="mt-1 text-xs font-semibold text-[#1f6f3e]">
+                  Troco: {formatoMoeda.format(trocoPrevisto)}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           disabled={!carrinho.length || pending}
           onClick={finalizar}
           className="mt-4 w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#195c33] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {pending ? "Abrindo pedido..." : "Abrir pedido"}
+          {pending
+            ? "Finalizando..."
+            : `Finalizar pedido — ${formatoMoeda.format(total)}`}
         </button>
       </div>
     </div>

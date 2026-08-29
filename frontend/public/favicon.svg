@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">
+  <defs>
+    <linearGradient id="verdeKK" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#166534"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+  <circle cx="150" cy="150" r="148" fill="#ffffff" stroke="#dcfce7" stroke-width="3"/>
+  <text x="150" y="150" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-weight="700" font-size="54" fill="url(#verdeKK)">Kina Kana</text>
+  <line x1="60" y1="163" x2="240" y2="163" stroke="url(#verdeKK)" stroke-width="3"/>
+  <text x="150" y="195" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-weight="600" font-size="24" fill="#166534">Pastelaria</text>
+</svg>

@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Poppins', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Botões grandes e confortáveis para uso em tablet/balcão */
+.btn-toque {
+  @apply select-none active:scale-[0.97] transition-transform;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { @apply bg-marca-300 dark:bg-marca-700 rounded-full; }
+::-webkit-scrollbar-track { @apply bg-transparent; }
+
+@media print {
+  body * { visibility: hidden; }
+  #ficha-impressao, #ficha-impressao * { visibility: visible; }
+  #ficha-impressao { position: absolute; top: 0; left: 0; width: 80mm; }
+}

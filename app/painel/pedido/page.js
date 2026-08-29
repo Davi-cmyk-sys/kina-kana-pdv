@@ -37,6 +37,45 @@ export default async function PedidoPage() {
     .eq("disponivel", true)
     .order("nome", { ascending: true });
 
+  const { data: adicionais } = await supabase
+    .from("adicionais")
+    .select("id, nome, preco, ativo")
+    .eq("ativo", true)
+    .order("nome", { ascending: true });
+
+  const { data: combosBrutos } = await supabase
+    .from("combos")
+    .select("id, nome, preco, imagem, ativo")
+    .eq("ativo", true)
+    .order("nome", { ascending: true });
+
+  const { data: itensCombo } = await supabase
+    .from("combo_itens")
+    .select(
+      "id, combo_id, quantidade, rotulo, produto_id, produtos(nome), categoria_id, categorias(nome, icone)"
+    );
+
+  // Monta cada combo já com a lista dos itens dele (pra não precisar de
+  // outra chamada ao banco no navegador).
+  const combos = (combosBrutos ?? []).map((combo) => ({
+    id: combo.id,
+    nome: combo.nome,
+    preco: combo.preco,
+    imagem: combo.imagem,
+    itens: (itensCombo ?? [])
+      .filter((item) => item.combo_id === combo.id)
+      .map((item) => ({
+        id: item.id,
+        quantidade: item.quantidade,
+        rotulo: item.rotulo,
+        produtoId: item.produto_id,
+        produtoNome: item.produtos?.nome ?? null,
+        categoriaId: item.categoria_id,
+        categoriaNome: item.categorias?.nome ?? null,
+        categoriaIcone: item.categorias?.icone ?? null,
+      })),
+  }));
+
   return (
     <div className="min-h-screen bg-[#f6f4ee] p-6">
       <div className="mx-auto max-w-5xl">
@@ -54,11 +93,17 @@ export default async function PedidoPage() {
           Novo Pedido
         </h1>
         <p className="mt-1 text-sm text-[#5b6b5c]">
-          Clique nos produtos para montar o pedido. Combos, adicionais e
-          desconto chegam nas próximas partes desta fase.
+          Clique nos produtos ou combos para montar o pedido. Adicione
+          adicionais em cada item e, se precisar, aplique um desconto com
+          autorização de um gerente/admin.
         </p>
 
-        <NovoPedido categorias={categorias ?? []} produtos={produtos ?? []} />
+        <NovoPedido
+          categorias={categorias ?? []}
+          produtos={produtos ?? []}
+          combos={combos}
+          adicionais={adicionais ?? []}
+        />
       </div>
     </div>
   );

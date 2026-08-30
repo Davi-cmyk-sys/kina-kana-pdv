@@ -1,16 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { sair } from "./actions";
-
-const NOMES_PAPEL = {
-  admin: "Administrador(a)",
-  gerente: "Gerente",
-  caixa: "Caixa",
-  cozinha: "Cozinha",
-  entregador: "Entregador(a)",
-  pendente: "Aguardando liberação",
-};
+import { secoesPermitidas } from "@/lib/secoesPainel";
 
 export default async function PainelPage() {
   const supabase = await createClient();
@@ -32,130 +23,43 @@ export default async function PainelPage() {
   const papel = perfil?.papel ?? "pendente";
   const nome = perfil?.nome ?? user.email;
   const aguardandoLiberacao = papel === "pendente";
+  const secoes = secoesPermitidas(papel);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f6f4ee] p-6">
-      <main className="w-full max-w-lg rounded-2xl border border-[#dcdfd2] bg-white p-8 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-[#1f6f3e]">
-          Kina Kana PDV
-        </p>
-        <h1 className="mt-2 text-2xl font-bold text-[#1c2a1f]">
-          Olá, {nome}
-        </h1>
-        <p className="mt-1 text-sm text-[#5b6b5c]">
-          Você está logado como{" "}
-          <span className="font-semibold text-[#1c2a1f]">
-            {NOMES_PAPEL[papel] ?? papel}
-          </span>
-          .
-        </p>
+    <div className="mx-auto w-full max-w-3xl">
+      <h1 className="text-2xl font-bold text-[#1c2a1f]">Olá, {nome}</h1>
+      <p className="mt-1 text-sm text-[#5b6b5c]">
+        O que você quer fazer agora? Toque em uma opção abaixo — ou use a
+        barra no topo pra trocar de tela a qualquer momento.
+      </p>
 
-        {aguardandoLiberacao && (
-          <div className="mt-4 rounded-xl bg-[#fdf3e0] p-3 text-sm text-[#7a5b16]">
-            Sua conta ainda não tem um papel definido no sistema. Peça para
-            um administrador liberar seu acesso.
-          </div>
-        )}
+      {aguardandoLiberacao && (
+        <div className="mt-4 rounded-xl bg-[#fdf3e0] p-3 text-sm text-[#7a5b16]">
+          Sua conta ainda não tem um papel definido no sistema. Peça para um
+          administrador liberar seu acesso.
+        </div>
+      )}
 
-        {["admin", "gerente", "caixa"].includes(papel) && (
-          <Link
-            href="/painel/pedido"
-            className="mt-6 block w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#195c33]"
-          >
-            Novo Pedido
-          </Link>
-        )}
-
-        {["admin", "gerente", "caixa"].includes(papel) && (
-          <Link
-            href="/painel/pedidos"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Pedidos
-          </Link>
-        )}
-
-        {["admin", "gerente", "caixa"].includes(papel) && (
-          <Link
-            href="/painel/caixa"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Caixa
-          </Link>
-        )}
-
-        {["admin", "gerente"].includes(papel) && (
-          <Link
-            href="/painel/produtos"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Cardápio (categorias e produtos)
-          </Link>
-        )}
-
-        {["admin", "gerente"].includes(papel) && (
-          <Link
-            href="/painel/combos"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Combos e adicionais
-          </Link>
-        )}
-
-        {["admin", "gerente", "caixa"].includes(papel) && (
-          <Link
-            href="/painel/impressora"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Configuração de Impressora
-          </Link>
-        )}
-
-        {["admin", "gerente"].includes(papel) && (
-          <Link
-            href="/painel/relatorios"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Relatórios e estatísticas
-          </Link>
-        )}
-
-        {["admin", "gerente"].includes(papel) && (
-          <Link
-            href="/painel/estoque"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Estoque
-          </Link>
-        )}
-
-        {papel === "admin" && (
-          <Link
-            href="/painel/auditoria"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Auditoria
-          </Link>
-        )}
-
-        {papel === "admin" && (
-          <Link
-            href="/painel/funcionarios"
-            className="mt-3 block w-full rounded-lg border border-[#1f6f3e] px-4 py-2 text-center text-sm font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
-          >
-            Gerenciar funcionários
-          </Link>
-        )}
-
-        <form action={sair} className="mt-3">
-          <button
-            type="submit"
-            className="w-full rounded-lg border border-[#dcdfd2] px-4 py-2 text-sm font-semibold text-[#1c2a1f] transition hover:bg-[#f6f4ee]"
-          >
-            Sair
-          </button>
-        </form>
-      </main>
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {secoes.map((secao) => {
+          const principal = secao.href === "/painel/pedido";
+          return (
+            <Link
+              key={secao.href}
+              href={secao.href}
+              className={
+                "flex flex-col items-center justify-center gap-2 rounded-2xl border-2 px-4 py-6 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md " +
+                (principal
+                  ? "border-[#1f6f3e] bg-[#1f6f3e] text-white"
+                  : "border-[#dcdfd2] bg-white text-[#1c2a1f] hover:border-[#1f6f3e]")
+              }
+            >
+              <span className="text-4xl leading-none">{secao.icone}</span>
+              <span className="text-sm font-bold">{secao.label}</span>
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }

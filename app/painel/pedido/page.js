@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import NovoPedido from "./NovoPedido";
@@ -77,34 +76,20 @@ export default async function PedidoPage() {
   }));
 
   return (
-    <div className="min-h-screen bg-[#f6f4ee] p-6">
-      <div className="mx-auto max-w-5xl">
-        <Link
-          href="/painel"
-          className="text-sm font-medium text-[#1f6f3e] hover:underline"
-        >
-          ← Voltar ao painel
-        </Link>
+    <div className="mx-auto max-w-5xl">
+      <h1 className="text-2xl font-bold text-[#1c2a1f]">Novo Pedido</h1>
+      <p className="mt-1 text-sm text-[#5b6b5c]">
+        Clique nos produtos ou combos para montar o pedido. Adicione
+        adicionais em cada item e, se precisar, aplique um desconto com
+        autorização de um gerente/admin.
+      </p>
 
-        <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-[#1f6f3e]">
-          Kina Kana PDV
-        </p>
-        <h1 className="mt-1 text-2xl font-bold text-[#1c2a1f]">
-          Novo Pedido
-        </h1>
-        <p className="mt-1 text-sm text-[#5b6b5c]">
-          Clique nos produtos ou combos para montar o pedido. Adicione
-          adicionais em cada item e, se precisar, aplique um desconto com
-          autorização de um gerente/admin.
-        </p>
-
-        <NovoPedido
-          categorias={categorias ?? []}
-          produtos={produtos ?? []}
-          combos={combos}
-          adicionais={adicionais ?? []}
-        />
-      </div>
+      <NovoPedido
+        categorias={categorias ?? []}
+        produtos={produtos ?? []}
+        combos={combos}
+        adicionais={adicionais ?? []}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { apagarPedido } from "./actions";
 import BotaoApagar from "@/components/BotaoApagar";
+import ImprimirPedidoBotao from "./ImprimirPedidoBotao";
 
 const NOMES_STATUS = {
   aberto: "Aberto (sem pagamento)",
@@ -65,7 +66,13 @@ export default async function PedidosPage({ searchParams }) {
 
   const { data: itens } = await supabase
     .from("itens_pedido")
-    .select("pedido_id, nome_snapshot, quantidade");
+    .select(
+      "id, pedido_id, nome_snapshot, quantidade, preco_unitario, combo_escolhas"
+    );
+
+  const { data: adicionaisDosItens } = await supabase
+    .from("item_adicionais")
+    .select("item_pedido_id, nome_snapshot, preco_unitario, quantidade");
 
   const { data: pagamentos } = await supabase
     .from("pagamentos")
@@ -129,6 +136,28 @@ export default async function PedidosPage({ searchParams }) {
                 (p) => p.pedido_id === pedido.id
               );
 
+              const itensParaRecibo = (itensDoPedido ?? []).map((item) => ({
+                nome: item.nome_snapshot,
+                quantidade: item.quantidade,
+                precoTotal: item.preco_unitario * item.quantidade,
+                escolhas: (item.combo_escolhas ?? [])
+                  .map((e) => e.produtoNome)
+                  .filter(Boolean),
+                adicionais: (adicionaisDosItens ?? [])
+                  .filter((a) => a.item_pedido_id === item.id)
+                  .map((a) => ({ nome: a.nome_snapshot, preco: a.preco_unitario })),
+              }));
+              const reciboDoPedido = {
+                numeroSenha: pedido.numero_senha,
+                dataHora: pedido.criado_em,
+                itens: itensParaRecibo,
+                subtotal: pedido.subtotal,
+                desconto: pedido.desconto ?? 0,
+                total: pedido.total,
+                formaPagamento: pagamentosDoPedido?.[0]?.forma ?? "outros",
+                troco: pagamentosDoPedido?.[0]?.troco ?? 0,
+              };
+
               return (
                 <div
                   key={pedido.id}
@@ -155,6 +184,7 @@ export default async function PedidosPage({ searchParams }) {
                       <p className="text-sm font-bold text-[#1c2a1f]">
                         {formatoMoeda.format(pedido.total)}
                       </p>
+                      <ImprimirPedidoBotao recibo={reciboDoPedido} />
                       {podeApagar && (
                         <BotaoApagar
                           acao={apagarPedido}

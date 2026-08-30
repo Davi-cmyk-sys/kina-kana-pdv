@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { criarPedido, autorizarDesconto } from "./actions";
+import { formatarRecibo, imprimirLinhas } from "@/lib/impressora";
 
 const formatoMoeda = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -36,6 +37,8 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
   const [resolvendoCombo, setResolvendoCombo] = useState(null); // { combo, respostas }
   const [mensagem, setMensagem] = useState(null);
   const [pending, startTransition] = useTransition();
+  const [ultimoRecibo, setUltimoRecibo] = useState(null);
+  const [imprimindo, setImprimindo] = useState(false);
 
   // ---------- desconto ----------
   const [descontoValorTexto, setDescontoValorTexto] = useState("");
@@ -235,11 +238,43 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
               ? ` Troco: ${formatoMoeda.format(resultado.troco)}`
               : ""),
         });
+        setUltimoRecibo({
+          numeroSenha: resultado.numeroSenha,
+          dataHora: new Date().toISOString(),
+          itens: carrinho.map((item) => ({
+            nome: item.nome,
+            quantidade: item.quantidade,
+            precoTotal: item.preco * item.quantidade,
+            escolhas: item.escolhas?.map((e) => e.produtoNome).filter(Boolean),
+            adicionais: item.adicionaisSelecionados,
+          })),
+          subtotal: subtotalGeral,
+          desconto: descontoAutorizado?.valor ?? 0,
+          total,
+          formaPagamento,
+          troco: resultado.troco ?? 0,
+        });
         setCarrinho([]);
         removerDesconto();
         setRecebidoTexto("");
       }
     });
+  }
+
+  async function imprimirComprovante() {
+    if (!ultimoRecibo) return;
+    setImprimindo(true);
+    try {
+      await imprimirLinhas(formatarRecibo(ultimoRecibo));
+      setMensagem({ tipo: "sucesso", texto: "Comprovante enviado para a impressora." });
+    } catch (err) {
+      setMensagem({
+        tipo: "erro",
+        texto: "Erro ao imprimir: " + (err?.message ?? String(err)),
+      });
+    } finally {
+      setImprimindo(false);
+    }
   }
 
   return (
@@ -398,6 +433,16 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
             }
           >
             {mensagem.texto}
+            {mensagem.tipo === "sucesso" && ultimoRecibo && (
+              <button
+                type="button"
+                disabled={imprimindo}
+                onClick={imprimirComprovante}
+                className="mt-2 block w-full rounded-lg border border-[#1f6f3e] bg-white px-3 py-1.5 text-xs font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee] disabled:opacity-50"
+              >
+                {imprimindo ? "Imprimindo..." : "🖨️ Imprimir comprovante"}
+              </button>
+            )}
           </div>
         )}
 

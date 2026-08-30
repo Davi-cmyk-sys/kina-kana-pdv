@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { registrarAuditoria } from "@/lib/auditoria";
 
 function comErro(mensagem) {
   redirect("/painel/combos?erro=" + encodeURIComponent(mensagem));
@@ -106,6 +107,7 @@ export async function adicionarItemCombo(formData) {
 
 export async function apagarAdicional(formData) {
   const id = formData.get("id")?.toString();
+  const nome = formData.get("nome")?.toString() || `#${id}`;
   if (!id) comErro("Adicional inválido.");
 
   const supabase = await createClient();
@@ -119,11 +121,13 @@ export async function apagarAdicional(formData) {
     );
   }
 
+  await registrarAuditoria("adicional.apagar", `Apagou o adicional "${nome}".`);
   comSucesso("Adicional apagado.");
 }
 
 export async function apagarCombo(formData) {
   const id = formData.get("id")?.toString();
+  const nome = formData.get("nome")?.toString() || `#${id}`;
   if (!id) comErro("Combo inválido.");
 
   const supabase = await createClient();
@@ -137,6 +141,7 @@ export async function apagarCombo(formData) {
     );
   }
 
+  await registrarAuditoria("combo.apagar", `Apagou o combo "${nome}".`);
   comSucesso("Combo apagado.");
 }
 

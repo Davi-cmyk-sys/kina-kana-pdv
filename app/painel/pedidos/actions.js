@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { registrarAuditoria } from "@/lib/auditoria";
 
 function comErro(mensagem) {
   redirect("/painel/pedidos?erro=" + encodeURIComponent(mensagem));
@@ -13,6 +14,7 @@ function comSucesso(mensagem) {
 
 export async function apagarPedido(formData) {
   const id = formData.get("id")?.toString();
+  const numeroSenha = formData.get("numero_senha")?.toString() || `#${id}`;
   if (!id) {
     comErro("Pedido inválido.");
   }
@@ -28,6 +30,10 @@ export async function apagarPedido(formData) {
     );
   }
 
+  await registrarAuditoria(
+    "pedido.apagar",
+    `Apagou o pedido nº ${numeroSenha}.`
+  );
   comSucesso("Pedido apagado.");
 }
 

@@ -188,7 +188,7 @@ export default async function PedidosPage({ searchParams }) {
                       {podeApagar && (
                         <BotaoApagar
                           acao={apagarPedido}
-                          campos={{ id: pedido.id }}
+                          campos={{ id: pedido.id, numero_senha: pedido.numero_senha }}
                           confirmacao={`Apagar o pedido nº ${pedido.numero_senha}?`}
                           className="mt-1 text-xs font-medium text-[#b3432f] hover:underline"
                         />

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { registrarAuditoria } from "@/lib/auditoria";
 
 function comErro(mensagem) {
   redirect("/painel/produtos?erro=" + encodeURIComponent(mensagem));
@@ -89,6 +90,7 @@ export async function criarProduto(formData) {
 
 export async function apagarProduto(formData) {
   const id = formData.get("id")?.toString();
+  const nome = formData.get("nome")?.toString() || `#${id}`;
   if (!id) {
     comErro("Produto inválido.");
   }
@@ -108,11 +110,13 @@ export async function apagarProduto(formData) {
     comErro(error.message);
   }
 
+  await registrarAuditoria("produto.apagar", `Apagou o produto "${nome}".`);
   comSucesso("Produto apagado.");
 }
 
 export async function apagarCategoria(formData) {
   const id = formData.get("id")?.toString();
+  const nome = formData.get("nome")?.toString() || `#${id}`;
   if (!id) {
     comErro("Categoria inválida.");
   }
@@ -132,5 +136,6 @@ export async function apagarCategoria(formData) {
     comErro(error.message);
   }
 
+  await registrarAuditoria("categoria.apagar", `Apagou a categoria "${nome}".`);
   comSucesso("Categoria apagada.");
 }

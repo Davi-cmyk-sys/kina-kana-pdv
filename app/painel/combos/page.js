@@ -171,7 +171,7 @@ export default async function CombosPage({ searchParams }) {
                   </p>
                   <BotaoApagar
                     acao={apagarAdicional}
-                    campos={{ id: a.id }}
+                    campos={{ id: a.id, nome: a.nome }}
                     confirmacao={`Apagar o adicional "${a.nome}"?`}
                     className="text-xs font-medium text-[#b3432f] hover:underline"
                   />
@@ -299,7 +299,7 @@ export default async function CombosPage({ searchParams }) {
                       </p>
                       <BotaoApagar
                         acao={apagarCombo}
-                        campos={{ id: combo.id }}
+                        campos={{ id: combo.id, nome: combo.nome }}
                         confirmacao={`Apagar o combo "${combo.nome}" e todos os itens dele?`}
                         className="text-xs font-medium text-[#b3432f] hover:underline"
                       />

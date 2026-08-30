@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { registrarAuditoria } from "@/lib/auditoria";
 
 function comErro(mensagem) {
   redirect("/painel/caixa?erro=" + encodeURIComponent(mensagem));
@@ -45,6 +46,10 @@ export async function abrirCaixa(formData) {
     );
   }
 
+  await registrarAuditoria(
+    "caixa.abrir",
+    `Abriu o caixa com R$ ${valorAbertura.toFixed(2).replace(".", ",")}.`
+  );
   comSucesso("Caixa aberto.");
 }
 
@@ -86,6 +91,12 @@ export async function registrarMovimentacao(formData) {
     );
   }
 
+  await registrarAuditoria(
+    tipo === "sangria" ? "caixa.sangria" : "caixa.suprimento",
+    `Registrou ${tipo} de R$ ${valor.toFixed(2).replace(".", ",")}${
+      motivo ? ` — ${motivo}` : ""
+    }.`
+  );
   comSucesso(
     tipo === "sangria" ? "Sangria registrada." : "Suprimento registrado."
   );
@@ -133,6 +144,12 @@ export async function editarCaixa(formData) {
     );
   }
 
+  await registrarAuditoria(
+    "caixa.editar",
+    `Corrigiu o caixa #${caixaId} (abertura: R$ ${valorAbertura
+      .toFixed(2)
+      .replace(".", ",")}, contado: R$ ${valorContado.toFixed(2).replace(".", ",")}).`
+  );
   comSucesso("Caixa atualizado.");
 }
 
@@ -175,5 +192,9 @@ export async function fecharCaixa(formData) {
     );
   }
 
+  await registrarAuditoria(
+    "caixa.fechar",
+    `Fechou o caixa #${caixaId} com R$ ${valorContado.toFixed(2).replace(".", ",")} contados.`
+  );
   comSucesso("Caixa fechado.");
 }

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { registrarAuditoria } from "@/lib/auditoria";
 
 function comErro(mensagem) {
   redirect("/painel/funcionarios?erro=" + encodeURIComponent(mensagem));
@@ -50,5 +51,9 @@ export async function editarFuncionario(formData) {
     );
   }
 
+  await registrarAuditoria(
+    "funcionario.editar",
+    `Editou o funcionário "${nome}" (papel: ${papel}, ativo: ${ativo ? "sim" : "não"}).`
+  );
   comSucesso(`Dados de "${nome}" atualizados.`);
 }

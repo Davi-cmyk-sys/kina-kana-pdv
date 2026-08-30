@@ -3,6 +3,7 @@
 import { createClient as criarClienteAnonimo } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { registrarAuditoria } from "@/lib/auditoria";
 
 function subtotalDoItem(item) {
   const totalAdicionais = (item.adicionaisSelecionados ?? []).reduce(
@@ -160,6 +161,41 @@ export async function criarPedido({ itens, desconto, pagamento }) {
       }
     }
 
+    // Baixa automática de estoque, a partir da ficha técnica de cada
+    // produto vendido (combos não têm baixa automática ainda). Best-effort:
+    // um erro aqui não pode derrubar uma venda que já foi concluída.
+    try {
+      const produtoIds = itens
+        .filter((i) => i.tipo === "produto")
+        .map((i) => i.produtoId);
+
+      if (produtoIds.length > 0) {
+        const { data: fichaTecnica } = await supabase
+          .from("produto_ingredientes")
+          .select("produto_id, ingrediente_id, quantidade_por_unidade")
+          .in("produto_id", produtoIds);
+
+        for (const item of itens) {
+          if (item.tipo !== "produto") continue;
+          const ingredientesDoProduto = (fichaTecnica ?? []).filter(
+            (f) => f.produto_id === item.produtoId
+          );
+          for (const f of ingredientesDoProduto) {
+            await supabase.from("movimentacoes_estoque").insert({
+              ingrediente_id: f.ingrediente_id,
+              tipo: "saida",
+              quantidade: f.quantidade_por_unidade * item.quantidade,
+              motivo: `Venda do pedido nº ${pedido.numero_senha}`,
+              pedido_id: pedido.id,
+              criado_por: user.id,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao dar baixa no estoque:", err);
+    }
+
     const { error: erroPagamento } = await supabase.from("pagamentos").insert({
       pedido_id: pedido.id,
       forma: pagamento.forma,
@@ -174,6 +210,17 @@ export async function criarPedido({ itens, desconto, pagamento }) {
           "O pedido foi criado, mas houve um erro ao registrar o pagamento: " +
           erroPagamento.message,
       };
+    }
+
+    if (valorDesconto > 0) {
+      await registrarAuditoria(
+        "desconto.autorizar",
+        `Desconto de R$ ${valorDesconto
+          .toFixed(2)
+          .replace(".", ",")} no pedido nº ${pedido.numero_senha}, autorizado por ${
+          desconto.autorizadoPorNome ?? desconto.autorizadoPorId
+        }${desconto.motivo ? ` (motivo: ${desconto.motivo})` : ""}.`
+      );
     }
 
     return { sucesso: true, numeroSenha: pedido.numero_senha, troco };

@@ -241,7 +241,7 @@ export default async function ProdutosPage({ searchParams }) {
                   </h2>
                   <BotaoApagar
                     acao={apagarCategoria}
-                    campos={{ id: categoria.id }}
+                    campos={{ id: categoria.id, nome: categoria.nome }}
                     confirmacao={`Apagar a categoria "${categoria.nome}"? Isso só funciona se ela não tiver produtos dentro.`}
                     className="text-xs font-medium text-[#b3432f] hover:underline"
                   />
@@ -275,7 +275,7 @@ export default async function ProdutosPage({ searchParams }) {
                           </p>
                           <BotaoApagar
                             acao={apagarProduto}
-                            campos={{ id: produto.id }}
+                            campos={{ id: produto.id, nome: produto.nome }}
                             confirmacao={`Apagar o produto "${produto.nome}"?`}
                             className="mt-1 text-xs font-medium text-[#b3432f] hover:underline"
                           />

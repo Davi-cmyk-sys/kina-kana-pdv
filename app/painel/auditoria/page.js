@@ -12,7 +12,9 @@ const ROTULOS_ACAO = {
   "combo.apagar": "Combo apagado",
   "pedido.apagar": "Pedido apagado",
   "ingrediente.apagar": "Ingrediente apagado",
+  "funcionario.cadastrar": "Funcionário cadastrado",
   "funcionario.editar": "Funcionário editado",
+  "funcionario.apagar": "Funcionário excluído",
   "caixa.abrir": "Caixa aberto",
   "caixa.fechar": "Caixa fechado",
   "caixa.editar": "Caixa corrigido",
@@ -167,11 +169,12 @@ export default async function AuditoriaPage({ searchParams }) {
         </div>
 
         <p className="mt-6 text-xs text-[#8b968a]">
-          Esse histórico cobre exclusões, edições de funcionários,
-          abertura/fechamento/correção de caixa, sangria/suprimento,
-          descontos autorizados e entradas/ajustes de estoque. Cadastros
-          rotineiros (criar produto, categoria, combo etc.) não entram aqui
-          por enquanto, pra manter a lista fácil de acompanhar.
+          Esse histórico cobre exclusões, cadastro/edição/exclusão de
+          funcionários, abertura/fechamento/correção de caixa,
+          sangria/suprimento, descontos autorizados e entradas/ajustes de
+          estoque. Cadastros rotineiros (criar produto, categoria, combo
+          etc.) não entram aqui por enquanto, pra manter a lista fácil de
+          acompanhar.
         </p>
       </main>
   );

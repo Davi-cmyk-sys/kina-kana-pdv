@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { temAcesso } from "@/lib/permissoes";
 import {
   abrirCaixa,
   registrarMovimentacao,
@@ -78,11 +79,15 @@ export default async function CaixaPage({ searchParams }) {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel")
+    .select("papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
-  const podeVender = ["admin", "gerente", "caixa"].includes(meuPerfil?.papel);
+  const podeVender = temAcesso("/painel/caixa", {
+    papel: meuPerfil?.papel,
+    master: meuPerfil?.master,
+    secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
+  });
   const podeGerenciar = ["admin", "gerente"].includes(meuPerfil?.papel);
 
   if (!podeVender) {

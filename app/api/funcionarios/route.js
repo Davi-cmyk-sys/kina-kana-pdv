@@ -1,40 +1,49 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { registrarAuditoria } from "@/lib/auditoria";
+import { SECOES_PAINEL } from "@/lib/secoesPainel";
 
 const PAPEIS_VALIDOS = ["admin", "gerente", "caixa", "cozinha", "entregador"];
+const HREFS_PERSONALIZAVEIS = new Set(
+  SECOES_PAINEL.filter(
+    (s) => s.href !== "/painel/funcionarios" && s.href !== "/painel/auditoria"
+  ).map((s) => s.href)
+);
 
 export async function POST(request) {
-  // 1. Confirma que quem está chamando essa rota está logado.
   const supabase = await createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) {
     return NextResponse.json({ erro: "Não autenticado." }, { status: 401 });
   }
 
-  // 2. Confirma que essa pessoa é admin — só admin pode criar contas.
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel")
+    .select("master")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (meuPerfil?.papel !== "admin") {
+  if (!meuPerfil?.master) {
     return NextResponse.json(
-      { erro: "Só administradores podem cadastrar funcionários." },
+      { erro: "Só as contas master podem cadastrar funcionários." },
       { status: 403 }
     );
   }
 
-  // 3. Valida os dados enviados pelo formulário.
   const body = await request.json().catch(() => null);
   const nome = body?.nome?.toString().trim();
   const email = body?.email?.toString().trim();
   const senha = body?.senha?.toString();
   const papel = body?.papel?.toString();
+  const secoesBloqueadas = Array.isArray(body?.secoesBloqueadas)
+    ? body.secoesBloqueadas
+        .map((v) => v?.toString())
+        .filter((href) => HREFS_PERSONALIZAVEIS.has(href))
+    : [];
 
   if (!nome || !email || !senha || !PAPEIS_VALIDOS.includes(papel)) {
     return NextResponse.json(
@@ -50,12 +59,8 @@ export async function POST(request) {
     );
   }
 
-  // 4. Cria a conta usando a service_role key (só o servidor tem acesso a
-  // ela). O gatilho no banco (private.handle_new_user) cria o perfil
-  // automaticamente com o nome e o papel enviados aqui.
   const admin = createAdminClient();
-
-  const { error } = await admin.auth.admin.createUser({
+  const { data: criado, error } = await admin.auth.admin.createUser({
     email,
     password: senha,
     email_confirm: true,
@@ -69,6 +74,23 @@ export async function POST(request) {
         : error.message;
     return NextResponse.json({ erro: mensagem }, { status: 400 });
   }
+
+  // O gatilho que cria a linha em "perfis" só sabe preencher nome/papel.
+  // Agora que a conta existe, gravamos por cima quais telas ficam
+  // bloqueadas para essa pessoa (se alguma foi escolhida).
+  if (secoesBloqueadas.length && criado?.user?.id) {
+    await admin
+      .from("perfis")
+      .update({ secoes_bloqueadas: secoesBloqueadas })
+      .eq("id", criado.user.id);
+  }
+
+  await registrarAuditoria(
+    "funcionario.cadastrar",
+    `Cadastrou o funcionário "${nome}" (papel: ${papel}, telas bloqueadas: ${
+      secoesBloqueadas.length ? secoesBloqueadas.join(", ") : "nenhuma"
+    }).`
+  );
 
   return NextResponse.json({ ok: true });
 }

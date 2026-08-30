@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { temAcesso } from "@/lib/permissoes";
 import NovoPedido from "./NovoPedido";
 
 export default async function PedidoPage() {
@@ -15,11 +16,15 @@ export default async function PedidoPage() {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel")
+    .select("papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
-  const podeVender = ["admin", "gerente", "caixa"].includes(meuPerfil?.papel);
+  const podeVender = temAcesso("/painel/pedido", {
+    papel: meuPerfil?.papel,
+    master: meuPerfil?.master,
+    secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
+  });
 
   if (!podeVender) {
     redirect("/painel");

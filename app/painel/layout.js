@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { secoesPermitidas } from "@/lib/secoesPainel";
+import { calcularAcessos } from "@/lib/permissoes";
 import PainelNav from "./PainelNav";
 import { sair } from "./actions";
 
@@ -27,14 +27,18 @@ export default async function PainelLayout({ children }) {
 
   const { data: perfil } = await supabase
     .from("perfis")
-    .select("nome, papel")
+    .select("nome, papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
   const papel = perfil?.papel ?? "pendente";
   const secoes = [
     { href: "/painel", label: "Início", icone: "🏠" },
-    ...secoesPermitidas(papel),
+    ...calcularAcessos({
+      papel,
+      master: perfil?.master,
+      secoesBloqueadas: perfil?.secoes_bloqueadas,
+    }),
   ];
 
   return (

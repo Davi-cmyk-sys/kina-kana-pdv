@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { secoesPermitidas } from "@/lib/secoesPainel";
+import { calcularAcessos } from "@/lib/permissoes";
 
 export default async function PainelPage() {
   const supabase = await createClient();
@@ -16,14 +16,18 @@ export default async function PainelPage() {
 
   const { data: perfil } = await supabase
     .from("perfis")
-    .select("nome, papel")
+    .select("nome, papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
   const papel = perfil?.papel ?? "pendente";
   const nome = perfil?.nome ?? user.email;
   const aguardandoLiberacao = papel === "pendente";
-  const secoes = secoesPermitidas(papel);
+  const secoes = calcularAcessos({
+    papel,
+    master: perfil?.master,
+    secoesBloqueadas: perfil?.secoes_bloqueadas,
+  });
 
   return (
     <div className="mx-auto w-full max-w-3xl">

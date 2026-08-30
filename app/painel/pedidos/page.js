@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { temAcesso } from "@/lib/permissoes";
 import { apagarPedido } from "./actions";
 import BotaoApagar from "@/components/BotaoApagar";
 import ImprimirPedidoBotao from "./ImprimirPedidoBotao";
@@ -45,11 +46,15 @@ export default async function PedidosPage({ searchParams }) {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel")
+    .select("papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
-  const podeVender = ["admin", "gerente", "caixa"].includes(meuPerfil?.papel);
+  const podeVender = temAcesso("/painel/pedidos", {
+    papel: meuPerfil?.papel,
+    master: meuPerfil?.master,
+    secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
+  });
   const podeApagar = ["admin", "gerente"].includes(meuPerfil?.papel);
 
   if (!podeVender) {

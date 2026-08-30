@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { temAcesso } from "@/lib/permissoes";
 import {
   criarAdicional,
   criarCombo,
@@ -30,11 +31,15 @@ export default async function CombosPage({ searchParams }) {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel")
+    .select("papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
-  const podeGerenciar = ["admin", "gerente"].includes(meuPerfil?.papel);
+  const podeGerenciar = temAcesso("/painel/combos", {
+    papel: meuPerfil?.papel,
+    master: meuPerfil?.master,
+    secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
+  });
 
   if (!podeGerenciar) {
     redirect("/painel");

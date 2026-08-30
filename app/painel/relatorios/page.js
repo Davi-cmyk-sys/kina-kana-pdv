@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { temAcesso } from "@/lib/permissoes";
 import ExportarCsv from "./ExportarCsv";
 
 const NOMES_FORMA = {
@@ -32,11 +33,15 @@ export default async function RelatoriosPage({ searchParams }) {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel")
+    .select("papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
-  const podeVerRelatorios = ["admin", "gerente"].includes(meuPerfil?.papel);
+  const podeVerRelatorios = temAcesso("/painel/relatorios", {
+    papel: meuPerfil?.papel,
+    master: meuPerfil?.master,
+    secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
+  });
 
   if (!podeVerRelatorios) {
     redirect("/painel");

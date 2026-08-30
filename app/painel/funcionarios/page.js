@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { SECOES_PAINEL } from "@/lib/secoesPainel";
 import NovoFuncionarioForm from "./NovoFuncionarioForm";
-import { editarFuncionario } from "./actions";
+import { editarFuncionario, apagarFuncionario } from "./actions";
+import BotaoApagar from "@/components/BotaoApagar";
 
 const NOMES_PAPEL = {
   admin: "Administrador(a)",
@@ -41,18 +43,24 @@ export default async function FuncionariosPage({ searchParams }) {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel")
+    .select("papel, master")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (meuPerfil?.papel !== "admin") {
+  if (!meuPerfil?.master) {
     redirect("/painel");
   }
 
   const { data: funcionarios } = await supabase
     .from("perfis")
-    .select("id, nome, papel, ativo, criado_em")
+    .select("id, nome, papel, ativo, master, secoes_bloqueadas, criado_em")
     .order("criado_em", { ascending: true });
+
+  // Lista de telas que dá pra personalizar por pessoa (Funcionários e
+  // Auditoria ficam de fora — continuam controladas só por master/admin).
+  const secoesPersonalizaveis = SECOES_PAINEL.filter(
+    (s) => s.href !== "/painel/funcionarios" && s.href !== "/painel/auditoria"
+  );
 
   return (
     <main className="mx-auto w-full max-w-2xl rounded-2xl border border-[#dcdfd2] bg-white p-8 shadow-sm">
@@ -89,6 +97,11 @@ export default async function FuncionariosPage({ searchParams }) {
                   <div>
                     <p className="text-sm font-semibold text-[#1c2a1f]">
                       {f.nome}
+                      {f.master && (
+                        <span className="ml-2 rounded-full bg-[#1f6f3e]/10 px-2 py-0.5 text-xs font-semibold text-[#1f6f3e]">
+                          Master
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-[#8b968a]">
                       {NOMES_PAPEL[f.papel] ?? f.papel}
@@ -147,6 +160,36 @@ export default async function FuncionariosPage({ searchParams }) {
                     Conta ativa (desmarque para bloquear o acesso sem apagar
                     a conta)
                   </label>
+
+                  <div className="rounded-lg border border-[#dcdfd2] bg-white p-3 sm:col-span-2">
+                    <p className="text-sm font-medium text-[#1c2a1f]">
+                      Marque as telas que essa pessoa NÃO pode acessar
+                    </p>
+                    <p className="mt-1 text-xs text-[#8b968a]">
+                      Deixe tudo desmarcado para usar o acesso normal do
+                      papel dela. Marque, por exemplo, "Relatórios" para
+                      esconder o lucro da loja dessa pessoa.
+                    </p>
+                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+                      {secoesPersonalizaveis.map((s) => (
+                        <label
+                          key={s.href}
+                          className="flex items-center gap-1.5 text-xs text-[#1c2a1f]"
+                        >
+                          <input
+                            type="checkbox"
+                            name="secoesBloqueadas"
+                            value={s.href}
+                            defaultChecked={f.secoes_bloqueadas?.includes(
+                              s.href
+                            )}
+                          />
+                          {s.icone} {s.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
                   <button
                     type="submit"
                     className="rounded-lg bg-[#1f6f3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#195c33] sm:col-span-2 sm:w-auto"
@@ -154,6 +197,18 @@ export default async function FuncionariosPage({ searchParams }) {
                     Salvar
                   </button>
                 </form>
+
+                {f.id !== user.id && (
+                  <div className="mt-3 border-t border-[#eceae0] pt-3">
+                    <BotaoApagar
+                      acao={apagarFuncionario}
+                      campos={{ id: f.id, nome: f.nome }}
+                      confirmacao={`Apagar a conta de "${f.nome}"? Essa pessoa perde o acesso ao sistema imediatamente e não é possível desfazer.`}
+                      className="text-xs font-medium text-[#b3432f] hover:underline"
+                      texto="Excluir esta conta"
+                    />
+                  </div>
+                )}
               </details>
             ))}
           </div>

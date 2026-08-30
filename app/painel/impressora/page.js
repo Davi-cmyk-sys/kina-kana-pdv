@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { temAcesso } from "@/lib/permissoes";
 import ConfiguracaoImpressora from "./ConfiguracaoImpressora";
 
 export default async function ImpressoraPage() {
@@ -15,11 +16,15 @@ export default async function ImpressoraPage() {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel")
+    .select("papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
-  const podeVender = ["admin", "gerente", "caixa"].includes(meuPerfil?.papel);
+  const podeVender = temAcesso("/painel/impressora", {
+    papel: meuPerfil?.papel,
+    master: meuPerfil?.master,
+    secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
+  });
 
   if (!podeVender) {
     redirect("/painel");

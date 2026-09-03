@@ -7,10 +7,15 @@ export default async function LoginPage({ searchParams }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f6f4ee] p-6">
       <main className="w-full max-w-sm rounded-2xl border border-[#dcdfd2] bg-white p-8 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-[#1f6f3e]">
-          Kina Kana PDV
-        </p>
-        <h1 className="mt-2 text-2xl font-bold text-[#1c2a1f]">Entrar</h1>
+        <div className="flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.jpg"
+            alt="Kina Kana"
+            className="h-36 w-36 rounded-full object-cover shadow-sm"
+          />
+        </div>
+        <h1 className="mt-4 text-2xl font-bold text-[#1c2a1f]">Entrar</h1>
         <p className="mt-1 text-sm text-[#5b6b5c]">
           Use o e-mail e a senha cadastrados pelo administrador.
         </p>

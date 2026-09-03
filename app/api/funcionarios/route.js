@@ -6,9 +6,9 @@ import { SECOES_PAINEL } from "@/lib/secoesPainel";
 
 const PAPEIS_VALIDOS = ["admin", "gerente", "caixa", "cozinha", "entregador"];
 const HREFS_PERSONALIZAVEIS = new Set(
-  SECOES_PAINEL.filter(
-    (s) => s.href !== "/painel/funcionarios" && s.href !== "/painel/auditoria"
-  ).map((s) => s.href)
+  SECOES_PAINEL.filter((s) => s.href !== "/painel/auditoria").map(
+    (s) => s.href
+  )
 );
 
 export async function POST(request) {

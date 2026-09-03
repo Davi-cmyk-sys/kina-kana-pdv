@@ -13,7 +13,7 @@ const PAPEIS = [
 ];
 
 const SECOES_PERSONALIZAVEIS = SECOES_PAINEL.filter(
-  (s) => s.href !== "/painel/funcionarios" && s.href !== "/painel/auditoria"
+  (s) => s.href !== "/painel/auditoria"
 );
 
 const campoClasse =

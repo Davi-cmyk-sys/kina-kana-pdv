@@ -24,9 +24,9 @@ const PAPEIS_VALIDOS = [
 ];
 
 const HREFS_PERSONALIZAVEIS = new Set(
-  SECOES_PAINEL.filter(
-    (s) => s.href !== "/painel/funcionarios" && s.href !== "/painel/auditoria"
-  ).map((s) => s.href)
+  SECOES_PAINEL.filter((s) => s.href !== "/painel/auditoria").map(
+    (s) => s.href
+  )
 );
 
 export async function editarFuncionario(formData) {
@@ -34,7 +34,7 @@ export async function editarFuncionario(formData) {
   const nome = formData.get("nome")?.toString().trim();
   const papel = formData.get("papel")?.toString();
   const ativo = formData.get("ativo") === "on";
-  const secoesBloqueadas = formData
+  let secoesBloqueadas = formData
     .getAll("secoesBloqueadas")
     .map((v) => v.toString())
     .filter((href) => HREFS_PERSONALIZAVEIS.has(href));
@@ -50,6 +50,18 @@ export async function editarFuncionario(formData) {
   }
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Ninguém pode se bloquear da própria tela de Funcionários — evita
+  // travar o próprio acesso sem querer.
+  if (user && id === user.id) {
+    secoesBloqueadas = secoesBloqueadas.filter(
+      (href) => href !== "/painel/funcionarios"
+    );
+  }
+
   const { error } = await supabase
     .from("perfis")
     .update({

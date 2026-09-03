@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SECOES_PAINEL } from "@/lib/secoesPainel";
+import { temAcesso } from "@/lib/permissoes";
 import NovoFuncionarioForm from "./NovoFuncionarioForm";
 import { editarFuncionario, apagarFuncionario } from "./actions";
 import BotaoApagar from "@/components/BotaoApagar";
@@ -43,11 +44,17 @@ export default async function FuncionariosPage({ searchParams }) {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel, master")
+    .select("papel, master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!meuPerfil?.master) {
+  const podeAcessar = temAcesso("/painel/funcionarios", {
+    papel: meuPerfil?.papel,
+    master: meuPerfil?.master,
+    secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
+  });
+
+  if (!podeAcessar) {
     redirect("/painel");
   }
 
@@ -56,10 +63,10 @@ export default async function FuncionariosPage({ searchParams }) {
     .select("id, nome, papel, ativo, master, secoes_bloqueadas, criado_em")
     .order("criado_em", { ascending: true });
 
-  // Lista de telas que dá pra personalizar por pessoa (Funcionários e
-  // Auditoria ficam de fora — continuam controladas só por master/admin).
+  // Lista de telas que dá pra personalizar por pessoa (Auditoria fica de
+  // fora — continua controlada só por quem é admin).
   const secoesPersonalizaveis = SECOES_PAINEL.filter(
-    (s) => s.href !== "/painel/funcionarios" && s.href !== "/painel/auditoria"
+    (s) => s.href !== "/painel/auditoria"
   );
 
   return (
@@ -171,23 +178,34 @@ export default async function FuncionariosPage({ searchParams }) {
                       esconder o lucro da loja dessa pessoa.
                     </p>
                     <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
-                      {secoesPersonalizaveis.map((s) => (
-                        <label
-                          key={s.href}
-                          className="flex items-center gap-1.5 text-xs text-[#1c2a1f]"
-                        >
-                          <input
-                            type="checkbox"
-                            name="secoesBloqueadas"
-                            value={s.href}
-                            defaultChecked={f.secoes_bloqueadas?.includes(
-                              s.href
-                            )}
-                          />
-                          {s.icone} {s.label}
-                        </label>
-                      ))}
+                      {secoesPersonalizaveis
+                        .filter(
+                          (s) =>
+                            !(f.id === user.id && s.href === "/painel/funcionarios")
+                        )
+                        .map((s) => (
+                          <label
+                            key={s.href}
+                            className="flex items-center gap-1.5 text-xs text-[#1c2a1f]"
+                          >
+                            <input
+                              type="checkbox"
+                              name="secoesBloqueadas"
+                              value={s.href}
+                              defaultChecked={f.secoes_bloqueadas?.includes(
+                                s.href
+                              )}
+                            />
+                            {s.icone} {s.label}
+                          </label>
+                        ))}
                     </div>
+                    {f.id === user.id && (
+                      <p className="mt-1 text-[10px] text-[#8b968a]">
+                        Você não pode bloquear "Funcionários" para si
+                        mesmo(a), pra não perder o acesso a essa tela.
+                      </p>
+                    )}
                   </div>
 
                   <button

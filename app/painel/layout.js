@@ -75,7 +75,7 @@ export default async function PainelLayout({ children }) {
 
           <div className="hidden text-right text-white sm:block">
             <p className="text-sm font-semibold leading-tight">
-              {perfil?.nome ?? user.email}
+              {perfil?.nome ?? "Usuário"}
             </p>
             <p className="text-xs leading-tight text-white/75">
               {NOMES_PAPEL[papel] ?? papel}

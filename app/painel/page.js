@@ -21,7 +21,7 @@ export default async function PainelPage() {
     .maybeSingle();
 
   const papel = perfil?.papel ?? "pendente";
-  const nome = perfil?.nome ?? user.email;
+  const nome = perfil?.nome ?? "Usuário";
   const aguardandoLiberacao = papel === "pendente";
   const secoes = calcularAcessos({
     papel,

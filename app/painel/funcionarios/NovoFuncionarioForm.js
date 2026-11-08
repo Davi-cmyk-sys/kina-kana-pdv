@@ -22,7 +22,6 @@ const campoClasse =
 export default function NovoFuncionarioForm() {
   const router = useRouter();
   const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [papel, setPapel] = useState("caixa");
   const [secoesBloqueadas, setSecoesBloqueadas] = useState([]);
@@ -50,7 +49,6 @@ export default function NovoFuncionarioForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nome,
-          email,
           senha,
           papel,
           secoesBloqueadas,
@@ -65,7 +63,6 @@ export default function NovoFuncionarioForm() {
 
       setSucesso(`${nome} foi cadastrado(a) com sucesso.`);
       setNome("");
-      setEmail("");
       setSenha("");
       setPapel("caixa");
       setSecoesBloqueadas([]);
@@ -125,33 +122,24 @@ export default function NovoFuncionarioForm() {
           </select>
         </div>
 
-        <div>
+        <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-[#1c2a1f]">
-            E-mail
-          </label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={campoClasse}
-            placeholder="funcionario@kinakana.com.br"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-[#1c2a1f]">
-            Senha inicial
+            Criar senha
           </label>
           <input
             type="text"
             required
             minLength={6}
+            autoComplete="off"
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
             className={campoClasse}
             placeholder="mínimo 6 caracteres"
           />
+          <p className="mt-1 text-xs text-[#8b968a]">
+            Para entrar, a pessoa digita o nome, toca no próprio usuário e usa
+            essa senha. Não precisa de e-mail.
+          </p>
         </div>
       </div>
 

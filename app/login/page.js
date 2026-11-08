@@ -1,8 +1,35 @@
-import { entrar } from "./actions";
+import { connection } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import FormularioLogin from "./FormularioLogin";
 
-export default async function LoginPage({ searchParams }) {
-  const params = await searchParams;
-  const erro = typeof params?.erro === "string" ? params.erro : null;
+// Lista de quem pode entrar (só nome e id — nada de e-mail, papel ou outro
+// dado). Usa o cliente admin porque quem está na tela de login ainda não
+// entrou, e as regras do banco não deixam visitante ler a tabela de perfis.
+async function carregarUsuarios() {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("perfis")
+      .select("id, nome")
+      .eq("ativo", true)
+      .order("nome", { ascending: true });
+
+    if (error) throw error;
+    return { usuarios: data ?? [], erro: null };
+  } catch (err) {
+    console.error("Erro ao carregar usuários para o login:", err);
+    return {
+      usuarios: [],
+      erro: "Não foi possível carregar a lista de usuários. Atualize a página e tente de novo.",
+    };
+  }
+}
+
+export default async function LoginPage() {
+  // A lista precisa ser lida a cada acesso (funcionário novo aparece na
+  // hora), nunca gerada uma vez só no build.
+  await connection();
+  const { usuarios, erro } = await carregarUsuarios();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f6f4ee] p-6">
@@ -17,59 +44,10 @@ export default async function LoginPage({ searchParams }) {
         </div>
         <h1 className="mt-4 text-2xl font-bold text-[#1c2a1f]">Entrar</h1>
         <p className="mt-1 text-sm text-[#5b6b5c]">
-          Use o e-mail e a senha cadastrados pelo administrador.
+          Digite seu nome, toque no seu usuário e digite sua senha.
         </p>
 
-        {erro && (
-          <div className="mt-4 rounded-xl bg-[#fbeae6] p-3 text-sm text-[#8a3320]">
-            {erro}
-          </div>
-        )}
-
-        <form action={entrar} className="mt-6 space-y-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-[#1c2a1f]"
-            >
-              E-mail
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              className="mt-1 w-full rounded-lg border border-[#dcdfd2] px-3 py-2 text-sm text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]"
-              placeholder="voce@kinakana.com.br"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="senha"
-              className="block text-sm font-medium text-[#1c2a1f]"
-            >
-              Senha
-            </label>
-            <input
-              id="senha"
-              name="senha"
-              type="password"
-              required
-              autoComplete="current-password"
-              className="mt-1 w-full rounded-lg border border-[#dcdfd2] px-3 py-2 text-sm text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#195c33]"
-          >
-            Entrar
-          </button>
-        </form>
+        <FormularioLogin usuarios={usuarios} erroInicial={erro} />
       </main>
     </div>
   );

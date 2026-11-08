@@ -158,6 +158,21 @@ export default async function FuncionariosPage({ searchParams }) {
                       ))}
                     </select>
                   </div>
+                  {meuPerfil?.master && (
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-[#1c2a1f]">
+                        Nova senha
+                      </label>
+                      <input
+                        type="text"
+                        name="novaSenha"
+                        minLength={6}
+                        autoComplete="off"
+                        className={campoClasse}
+                        placeholder="deixe em branco para manter a senha atual"
+                      />
+                    </div>
+                  )}
                   <label className="flex items-center gap-2 text-sm text-[#1c2a1f] sm:col-span-2">
                     <input
                       type="checkbox"

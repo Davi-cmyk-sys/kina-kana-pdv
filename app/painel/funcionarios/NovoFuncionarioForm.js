@@ -137,8 +137,8 @@ export default function NovoFuncionarioForm() {
             placeholder="mínimo 6 caracteres"
           />
           <p className="mt-1 text-xs text-[#8b968a]">
-            Para entrar, a pessoa digita o nome, toca no próprio usuário e usa
-            essa senha. Não precisa de e-mail.
+            Para entrar, a pessoa escolhe o próprio nome na lista e usa essa
+            senha. Não precisa de e-mail.
           </p>
         </div>
       </div>

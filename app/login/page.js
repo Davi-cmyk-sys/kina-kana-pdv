@@ -44,7 +44,7 @@ export default async function LoginPage() {
         </div>
         <h1 className="mt-4 text-2xl font-bold text-[#1c2a1f]">Entrar</h1>
         <p className="mt-1 text-sm text-[#5b6b5c]">
-          Digite seu nome, toque no seu usuário e digite sua senha.
+          Escolha seu nome na lista e digite sua senha.
         </p>
 
         <FormularioLogin usuarios={usuarios} erroInicial={erro} />

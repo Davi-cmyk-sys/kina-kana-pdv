@@ -32,13 +32,27 @@ export default async function PainelLayout({ children }) {
     .maybeSingle();
 
   const papel = perfil?.papel ?? "pendente";
+  const souMaster = perfil?.master === true;
+
+  let notificacoesNaoLidas = 0;
+  if (souMaster) {
+    const { count } = await supabase
+      .from("notificacoes")
+      .select("id", { count: "exact", head: true })
+      .eq("lida", false);
+    notificacoesNaoLidas = count ?? 0;
+  }
+
   const secoes = [
     { href: "/painel", label: "Início", icone: "🏠" },
     ...calcularAcessos({
-      papel,
       master: perfil?.master,
       secoesBloqueadas: perfil?.secoes_bloqueadas,
-    }),
+    }).map((secao) =>
+      secao.href === "/painel/notificacoes" && notificacoesNaoLidas > 0
+        ? { ...secao, label: `${secao.label} (${notificacoesNaoLidas})` }
+        : secao
+    ),
   ];
 
   return (

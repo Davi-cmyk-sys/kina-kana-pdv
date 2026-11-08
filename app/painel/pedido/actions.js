@@ -1,9 +1,8 @@
 "use server";
 
-import { createClient as criarClienteAnonimo } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { notificarMaster } from "@/lib/notificacoes";
 
 function subtotalDoItem(item) {
   const totalAdicionais = (item.adicionaisSelecionados ?? []).reduce(
@@ -59,24 +58,12 @@ export async function criarPedido({ itens, desconto, pagamento }) {
       0
     );
 
-    // Confere de novo, no servidor, que quem autorizou o desconto é mesmo
-    // admin/gerente — não confia só no que veio do navegador.
-    let valorDesconto = 0;
-    if (desconto?.valor > 0 && desconto?.autorizadoPorId) {
-      const admin = createAdminClient();
-      const { data: perfilAutorizador } = await admin
-        .from("perfis")
-        .select("papel, ativo")
-        .eq("id", desconto.autorizadoPorId)
-        .maybeSingle();
-
-      if (
-        perfilAutorizador?.ativo &&
-        ["admin", "gerente"].includes(perfilAutorizador?.papel)
-      ) {
-        valorDesconto = desconto.valor;
-      }
-    }
+    // Desconto agora é livre: qualquer vendedor logado aplica direto, sem
+    // precisar de senha de gerente/admin. Em troca, o master é avisado
+    // (abaixo) sempre que um pedido sai com desconto, pra poder
+    // acompanhar sem travar a operação de venda.
+    const valorDesconto =
+      desconto?.valor > 0 ? Math.min(Number(desconto.valor), subtotal) : 0;
     const total = Math.max(subtotal - valorDesconto, 0);
 
     const recebido = Number(pagamento.recebido) || 0;
@@ -94,8 +81,7 @@ export async function criarPedido({ itens, desconto, pagamento }) {
         subtotal,
         desconto: valorDesconto,
         desconto_motivo: valorDesconto > 0 ? desconto.motivo || null : null,
-        desconto_autorizado_por:
-          valorDesconto > 0 ? desconto.autorizadoPorId : null,
+        desconto_autorizado_por: valorDesconto > 0 ? user.id : null,
         total,
         status: "pago",
         pago_em: new Date().toISOString(),
@@ -213,14 +199,23 @@ export async function criarPedido({ itens, desconto, pagamento }) {
     }
 
     if (valorDesconto > 0) {
-      await registrarAuditoria(
-        "desconto.autorizar",
-        `Desconto de R$ ${valorDesconto
-          .toFixed(2)
-          .replace(".", ",")} no pedido nº ${pedido.numero_senha}, autorizado por ${
-          desconto.autorizadoPorNome ?? desconto.autorizadoPorId
-        }${desconto.motivo ? ` (motivo: ${desconto.motivo})` : ""}.`
-      );
+      const textoDesconto = `Desconto de R$ ${valorDesconto
+        .toFixed(2)
+        .replace(".", ",")} no pedido nº ${pedido.numero_senha}${
+        desconto.motivo ? ` (motivo: ${desconto.motivo})` : ""
+      }.`;
+
+      await registrarAuditoria("desconto.aplicar", textoDesconto);
+
+      // Ninguém mais precisa autorizar na hora — em troca, o master é
+      // avisado de todo pedido com desconto.
+      await notificarMaster({
+        tipo: "desconto",
+        titulo: "Pedido com desconto",
+        mensagem: textoDesconto,
+        relacionadoTipo: "pedido",
+        relacionadoId: pedido.id,
+      });
     }
 
     return { sucesso: true, numeroSenha: pedido.numero_senha, troco };
@@ -229,59 +224,6 @@ export async function criarPedido({ itens, desconto, pagamento }) {
     return {
       erro:
         "Erro inesperado ao abrir o pedido: " +
-        (err instanceof Error ? err.message : String(err)),
-    };
-  }
-}
-
-// Confere e-mail/senha de um gerente ou admin SEM trocar a sessão de quem
-// está logado (usa um cliente do Supabase à parte, só pra essa checagem).
-export async function autorizarDesconto({ email, senha }) {
-  if (!email || !senha) {
-    return { erro: "Preencha o e-mail e a senha de um gerente/admin." };
-  }
-
-  try {
-    const clienteTemporario = criarClienteAnonimo(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    );
-
-    const { data, error } = await clienteTemporario.auth.signInWithPassword({
-      email,
-      password: senha,
-    });
-
-    if (error || !data.user) {
-      return { erro: "E-mail ou senha incorretos." };
-    }
-
-    const { data: perfil } = await clienteTemporario
-      .from("perfis")
-      .select("papel, nome, ativo")
-      .eq("id", data.user.id)
-      .maybeSingle();
-
-    await clienteTemporario.auth.signOut();
-
-    if (!perfil?.ativo || !["admin", "gerente"].includes(perfil?.papel)) {
-      return {
-        erro:
-          "Essa conta não tem permissão de gerente para autorizar desconto.",
-      };
-    }
-
-    return {
-      sucesso: true,
-      autorizadoPorId: data.user.id,
-      autorizadoPorNome: perfil.nome,
-    };
-  } catch (err) {
-    console.error("Erro ao autorizar desconto:", err);
-    return {
-      erro:
-        "Erro inesperado ao autorizar o desconto: " +
         (err instanceof Error ? err.message : String(err)),
     };
   }

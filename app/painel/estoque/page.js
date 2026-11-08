@@ -72,7 +72,48 @@ export default async function EstoquePage({ searchParams }) {
     .order("criado_em", { ascending: false })
     .limit(20);
 
+  // Pra itens como Caldo de Cana e Frozen, o estoque não dá pra bater
+  // certinho (não é unitário, é "por média" — compra em saca/kg, vende
+  // em copo). Em vez de tentar uma baixa exata, aqui a gente só compara
+  // o total comprado (kg/L, todas as entradas já registradas) com o
+  // total vendido (copos/unidades) de cada produto ligado àquele
+  // ingrediente na ficha técnica — serve de conferência de rendimento.
+  const { data: entradasTotais } = await supabase
+    .from("movimentacoes_estoque")
+    .select("ingrediente_id, quantidade")
+    .eq("tipo", "entrada");
+
+  const { data: itensVendidos } = await supabase
+    .from("itens_pedido")
+    .select("produto_id, quantidade")
+    .not("produto_id", "is", null);
+
   const mapaIngredientes = new Map((ingredientes ?? []).map((i) => [i.id, i]));
+  const mapaProdutos = new Map((produtos ?? []).map((p) => [p.id, p]));
+
+  const ingredientesPorGranel = (ingredientes ?? []).filter((i) =>
+    ["kg", "l"].includes(i.unidade)
+  );
+
+  const relatorioRendimento = ingredientesPorGranel
+    .map((ing) => {
+      const totalComprado = (entradasTotais ?? [])
+        .filter((e) => e.ingrediente_id === ing.id)
+        .reduce((s, e) => s + Number(e.quantidade), 0);
+
+      const produtosLigados = (fichaTecnica ?? [])
+        .filter((f) => f.ingrediente_id === ing.id)
+        .map((f) => {
+          const produto = mapaProdutos.get(f.produto_id);
+          const totalVendido = (itensVendidos ?? [])
+            .filter((it) => it.produto_id === f.produto_id)
+            .reduce((s, it) => s + Number(it.quantidade), 0);
+          return { nome: produto?.nome ?? "?", totalVendido };
+        });
+
+      return { ingrediente: ing, totalComprado, produtosLigados };
+    })
+    .filter((r) => r.totalComprado > 0 || r.produtosLigados.length > 0);
   const formatoData = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -422,6 +463,59 @@ export default async function EstoquePage({ searchParams }) {
             </div>
           )}
         </div>
+
+        {/* Relatório de rendimento — Caldo de Cana, Frozen e afins */}
+        {ingredientesPorGranel.length > 0 && (
+          <div className="mt-6">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-[#1c2a1f]">
+              Relatório de rendimento (comprado × vendido)
+            </h2>
+            <p className="mt-1 text-xs text-[#8b968a]">
+              Pra ingredientes vendidos "por média" (ex: Caldo de Cana,
+              Frozen) — comprados em saca/kg ou litro, mas vendidos em
+              copo/unidade. Aqui não tem baixa exata, é só uma conferência:
+              quanto entrou vs. quantos copos saíram.
+            </p>
+
+            {!relatorioRendimento.length ? (
+              <p className="mt-2 text-sm text-[#8b968a]">
+                Cadastre um ingrediente em kg ou L (ex: "Cana-de-açúcar",
+                "Frozen") e ligue ele à ficha técnica do produto vendido
+                (ex: "Caldo de Cana") pra esse relatório aparecer aqui.
+              </p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {relatorioRendimento.map(({ ingrediente, totalComprado, produtosLigados }) => (
+                  <div
+                    key={ingrediente.id}
+                    className="rounded-xl border border-[#dcdfd2] p-3 text-sm"
+                  >
+                    <p className="font-semibold text-[#1c2a1f]">
+                      {ingrediente.nome}{" "}
+                      <span className="font-normal text-[#8b968a]">
+                        — {totalComprado} {NOMES_UNIDADE[ingrediente.unidade]}{" "}
+                        comprados (total)
+                      </span>
+                    </p>
+                    {!produtosLigados.length ? (
+                      <p className="mt-1 text-xs text-[#8b968a]">
+                        Nenhum produto ligado na ficha técnica ainda.
+                      </p>
+                    ) : (
+                      <div className="mt-1 space-y-0.5">
+                        {produtosLigados.map((p) => (
+                          <p key={p.nome} className="text-xs text-[#5b6b5c]">
+                            {p.nome}: <strong>{p.totalVendido}</strong> vendidos
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Movimentações recentes */}
         <div className="mt-6">

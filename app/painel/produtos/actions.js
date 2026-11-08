@@ -12,6 +12,45 @@ function comSucesso(mensagem) {
   redirect("/painel/produtos?sucesso=" + encodeURIComponent(mensagem));
 }
 
+// Extensão a partir do tipo do arquivo (mais confiável que o nome, que o
+// navegador às vezes manda sem extensão em fotos tiradas pelo celular).
+function extensaoDaImagem(arquivo) {
+  const porTipo = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+  };
+  if (arquivo?.type && porTipo[arquivo.type]) {
+    return porTipo[arquivo.type];
+  }
+  const nome = arquivo?.name ?? "";
+  const partes = nome.split(".");
+  return partes.length > 1 ? partes.pop().toLowerCase() : "jpg";
+}
+
+// Envia a foto de um produto para o bucket "produtos" e devolve a URL
+// pública. Se o envio falhar, devolve null (o produto continua salvo, só
+// sem foto) em vez de travar o cadastro inteiro por causa da imagem.
+async function enviarImagemProduto(supabase, produtoId, arquivo) {
+  if (!arquivo || typeof arquivo === "string" || !arquivo.size) {
+    return null;
+  }
+
+  const caminho = `produto-${produtoId}-${Date.now()}.${extensaoDaImagem(arquivo)}`;
+
+  const { error } = await supabase.storage
+    .from("produtos")
+    .upload(caminho, arquivo, { contentType: arquivo.type, upsert: true });
+
+  if (error) {
+    return null;
+  }
+
+  const { data } = supabase.storage.from("produtos").getPublicUrl(caminho);
+  return data?.publicUrl ?? null;
+}
+
 export async function criarCategoria(formData) {
   const nome = formData.get("nome")?.toString().trim();
   const icone = formData.get("icone")?.toString().trim() || null;
@@ -51,9 +90,10 @@ export async function criarProduto(formData) {
   const categoriaId = formData.get("categoria_id")?.toString();
   const nome = formData.get("nome")?.toString().trim();
   const descricao = formData.get("descricao")?.toString().trim() || null;
+  const codigo = formData.get("codigo")?.toString().trim() || null;
   const precoTexto = formData.get("preco")?.toString().replace(",", ".");
   const custoTexto = formData.get("custo")?.toString().replace(",", ".");
-  const imagem = formData.get("imagem")?.toString().trim() || null;
+  const arquivoImagem = formData.get("imagem_arquivo");
 
   const preco = Number(precoTexto);
   const custo = custoTexto ? Number(custoTexto) : 0;
@@ -68,14 +108,18 @@ export async function criarProduto(formData) {
 
   const supabase = await createClient();
 
-  const { error } = await supabase.from("produtos").insert({
-    categoria_id: Number(categoriaId),
-    nome,
-    descricao,
-    preco,
-    custo,
-    imagem,
-  });
+  const { data: produtoCriado, error } = await supabase
+    .from("produtos")
+    .insert({
+      categoria_id: Number(categoriaId),
+      nome,
+      descricao,
+      codigo,
+      preco,
+      custo,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     comErro(
@@ -85,7 +129,89 @@ export async function criarProduto(formData) {
     );
   }
 
+  // Se veio uma foto, envia agora que já temos o id do produto. Se a foto
+  // falhar por algum motivo, o produto já está salvo mesmo assim.
+  const urlImagem = await enviarImagemProduto(
+    supabase,
+    produtoCriado.id,
+    arquivoImagem
+  );
+  if (urlImagem) {
+    await supabase
+      .from("produtos")
+      .update({ imagem: urlImagem })
+      .eq("id", produtoCriado.id);
+  }
+
   comSucesso(`Produto "${nome}" cadastrado.`);
+}
+
+export async function editarProduto(formData) {
+  const id = formData.get("id")?.toString();
+  const categoriaId = formData.get("categoria_id")?.toString();
+  const nomeNovo = formData.get("nome")?.toString().trim();
+  const nome = nomeNovo || formData.get("nome_atual")?.toString() || `#${id}`;
+  const descricao = formData.get("descricao")?.toString().trim() || null;
+  const codigo = formData.get("codigo")?.toString().trim() || null;
+  const precoTexto = formData.get("preco")?.toString().replace(",", ".");
+  const custoTexto = formData.get("custo")?.toString().replace(",", ".");
+  const arquivoImagem = formData.get("imagem_arquivo");
+  const removerImagem = formData.get("remover_imagem") === "on";
+
+  if (!id) {
+    comErro("Produto inválido.");
+  }
+
+  if (!categoriaId || !nomeNovo || !precoTexto) {
+    comErro("Preencha categoria, nome e preço corretamente.");
+  }
+
+  const preco = Number(precoTexto);
+  const custo = custoTexto ? Number(custoTexto) : 0;
+
+  if (Number.isNaN(preco)) {
+    comErro("O preço precisa ser um número.");
+  }
+
+  if (Number.isNaN(custo)) {
+    comErro("O custo precisa ser um número.");
+  }
+
+  const supabase = await createClient();
+
+  const atualizacao = {
+    categoria_id: Number(categoriaId),
+    nome: nomeNovo,
+    descricao,
+    codigo,
+    preco,
+    custo,
+  };
+
+  if (removerImagem) {
+    atualizacao.imagem = null;
+  } else {
+    const urlImagem = await enviarImagemProduto(supabase, id, arquivoImagem);
+    if (urlImagem) {
+      atualizacao.imagem = urlImagem;
+    }
+  }
+
+  const { error } = await supabase
+    .from("produtos")
+    .update(atualizacao)
+    .eq("id", id);
+
+  if (error) {
+    comErro(
+      error.code === "42501"
+        ? "Só admin ou gerente podem editar produtos."
+        : error.message
+    );
+  }
+
+  await registrarAuditoria("produto.editar", `Editou o produto "${nome}".`);
+  comSucesso(`Produto "${nome}" atualizado.`);
 }
 
 export async function apagarProduto(formData) {

@@ -1,8 +1,12 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { criarPedido, autorizarDesconto } from "./actions";
+import { criarPedido } from "./actions";
 import { formatarRecibo, imprimirLinhas } from "@/lib/impressora";
+
+function reciboEmTexto(linhas) {
+  return linhas.map((l) => l.texto).join("\n");
+}
 
 const formatoMoeda = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -11,6 +15,10 @@ const formatoMoeda = new Intl.NumberFormat("pt-BR", {
 
 const campoClasse =
   "mt-1 w-full rounded-lg border border-[#dcdfd2] px-3 py-2 text-sm text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]";
+
+function temFotoReal(imagem) {
+  return typeof imagem === "string" && imagem.startsWith("http");
+}
 
 function subtotalDoItem(item) {
   const totalAdicionais = item.adicionaisSelecionados.reduce(
@@ -41,13 +49,13 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
   const [imprimindo, setImprimindo] = useState(false);
 
   // ---------- desconto ----------
+  // Agora é livre: qualquer vendedor aplica direto, sem senha de
+  // gerente. O master recebe um aviso sempre que um pedido sai com
+  // desconto (ver app/painel/pedido/actions.js).
   const [descontoValorTexto, setDescontoValorTexto] = useState("");
   const [descontoMotivo, setDescontoMotivo] = useState("");
-  const [descontoAutorizado, setDescontoAutorizado] = useState(null); // {valor, motivo, autorizadoPorId, autorizadoPorNome}
-  const [emailGerente, setEmailGerente] = useState("");
-  const [senhaGerente, setSenhaGerente] = useState("");
-  const [erroAutorizacao, setErroAutorizacao] = useState(null);
-  const [autorizando, setAutorizando] = useState(false);
+  const [descontoAplicado, setDescontoAplicado] = useState(null); // {valor, motivo}
+  const [erroDesconto, setErroDesconto] = useState(null);
 
   // ---------- pagamento ----------
   const [formaPagamento, setFormaPagamento] = useState("dinheiro");
@@ -175,44 +183,27 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
     (soma, item) => soma + subtotalDoItem(item),
     0
   );
-  const total = Math.max(
-    subtotalGeral - (descontoAutorizado?.valor ?? 0),
-    0
-  );
+  const total = Math.max(subtotalGeral - (descontoAplicado?.valor ?? 0), 0);
 
-  function autorizar() {
-    setErroAutorizacao(null);
+  function aplicarDesconto() {
+    setErroDesconto(null);
     const valor = Number(descontoValorTexto.replace(",", "."));
     if (!valor || valor <= 0) {
-      setErroAutorizacao("Digite um valor de desconto maior que zero.");
+      setErroDesconto("Digite um valor de desconto maior que zero.");
       return;
     }
-    setAutorizando(true);
-    startTransition(async () => {
-      const resultado = await autorizarDesconto({
-        email: emailGerente,
-        senha: senhaGerente,
-      });
-      setAutorizando(false);
-      if (resultado?.erro) {
-        setErroAutorizacao(resultado.erro);
-        return;
-      }
-      setDescontoAutorizado({
-        valor,
-        motivo: descontoMotivo,
-        autorizadoPorId: resultado.autorizadoPorId,
-        autorizadoPorNome: resultado.autorizadoPorNome,
-      });
-      setSenhaGerente("");
-    });
+    if (valor > subtotalGeral) {
+      setErroDesconto("O desconto não pode ser maior que o subtotal.");
+      return;
+    }
+    setDescontoAplicado({ valor, motivo: descontoMotivo });
   }
 
   function removerDesconto() {
-    setDescontoAutorizado(null);
+    setDescontoAplicado(null);
     setDescontoValorTexto("");
     setDescontoMotivo("");
-    setErroAutorizacao(null);
+    setErroDesconto(null);
   }
 
   const recebido = Number(recebidoTexto.replace(",", "."));
@@ -224,7 +215,7 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
     startTransition(async () => {
       const resultado = await criarPedido({
         itens: carrinho,
-        desconto: descontoAutorizado,
+        desconto: descontoAplicado,
         pagamento: { forma: formaPagamento, recebido: recebidoTexto || null },
       });
       if (resultado?.erro) {
@@ -249,7 +240,7 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
             adicionais: item.adicionaisSelecionados,
           })),
           subtotal: subtotalGeral,
-          desconto: descontoAutorizado?.valor ?? 0,
+          desconto: descontoAplicado?.valor ?? 0,
           total,
           formaPagamento,
           troco: resultado.troco ?? 0,
@@ -315,11 +306,19 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
                     onClick={() => clicarCombo(combo)}
                     className="flex flex-col items-start rounded-xl border border-[#dcdfd2] bg-white p-3 text-left transition hover:border-[#1f6f3e] hover:shadow-sm"
                   >
-                    <span className="text-2xl">{combo.imagem || "🍱"}</span>
-                    <span className="mt-2 text-sm font-semibold text-[#1c2a1f]">
+                    {temFotoReal(combo.imagem) ? (
+                      <img
+                        src={combo.imagem}
+                        alt={combo.nome}
+                        className="h-12 w-12 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <span className="text-2xl">{combo.imagem || "🍱"}</span>
+                    )}
+                    <span className="mt-2 text-base font-bold leading-tight text-[#1c2a1f]">
                       {combo.nome}
                     </span>
-                    <span className="mt-1 text-sm font-bold text-[#1f6f3e]">
+                    <span className="mt-1 text-base font-bold text-[#1f6f3e]">
                       {formatoMoeda.format(combo.preco)}
                     </span>
                   </button>
@@ -339,13 +338,26 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
                       onClick={() => adicionarProduto(produto)}
                       className="flex flex-col items-start rounded-xl border border-[#dcdfd2] bg-white p-3 text-left transition hover:border-[#1f6f3e] hover:shadow-sm"
                     >
-                      <span className="text-2xl">
-                        {produto.imagem || "🍽️"}
-                      </span>
-                      <span className="mt-2 text-sm font-semibold text-[#1c2a1f]">
+                      {temFotoReal(produto.imagem) ? (
+                        <img
+                          src={produto.imagem}
+                          alt={produto.nome}
+                          className="h-12 w-12 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="text-2xl">
+                          {produto.imagem || "🍽️"}
+                        </span>
+                      )}
+                      <span className="mt-2 text-base font-bold leading-tight text-[#1c2a1f]">
                         {produto.nome}
                       </span>
-                      <span className="mt-1 text-sm font-bold text-[#1f6f3e]">
+                      {produto.descricao && (
+                        <span className="mt-0.5 text-sm leading-tight text-[#5b6b5c]">
+                          {produto.descricao}
+                        </span>
+                      )}
+                      <span className="mt-1 text-base font-bold text-[#1f6f3e]">
                         {formatoMoeda.format(produto.preco)}
                       </span>
                     </button>
@@ -434,14 +446,46 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
           >
             {mensagem.texto}
             {mensagem.tipo === "sucesso" && ultimoRecibo && (
-              <button
-                type="button"
-                disabled={imprimindo}
-                onClick={imprimirComprovante}
-                className="mt-2 block w-full rounded-lg border border-[#1f6f3e] bg-white px-3 py-1.5 text-xs font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee] disabled:opacity-50"
-              >
-                {imprimindo ? "Imprimindo..." : "🖨️ Imprimir comprovante"}
-              </button>
+              <div className="mt-2 space-y-2">
+                <details className="rounded-lg border border-[#1f6f3e]/30 bg-white">
+                  <summary className="cursor-pointer px-3 py-1.5 text-xs font-semibold text-[#1f6f3e]">
+                    Ver recibo
+                  </summary>
+                  <pre className="whitespace-pre-wrap px-3 pb-3 text-xs text-[#1c2a1f]">
+                    {reciboEmTexto(formatarRecibo(ultimoRecibo))}
+                  </pre>
+                </details>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={imprimindo}
+                    onClick={imprimirComprovante}
+                    className="rounded-lg border border-[#1f6f3e] bg-white px-2 py-1.5 text-xs font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee] disabled:opacity-50"
+                  >
+                    {imprimindo ? "Imprimindo..." : "🖨️ Imprimir"}
+                  </button>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(
+                      reciboEmTexto(formatarRecibo(ultimoRecibo))
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-[#1f6f3e] bg-white px-2 py-1.5 text-center text-xs font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
+                  >
+                    📲 WhatsApp
+                  </a>
+                  <a
+                    href={`mailto:?subject=${encodeURIComponent(
+                      `Recibo — Pedido nº ${ultimoRecibo.numeroSenha}`
+                    )}&body=${encodeURIComponent(
+                      reciboEmTexto(formatarRecibo(ultimoRecibo))
+                    )}`}
+                    className="rounded-lg border border-[#1f6f3e] bg-white px-2 py-1.5 text-center text-xs font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
+                  >
+                    ✉️ E-mail
+                  </a>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -459,7 +503,7 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1">
-                    <p className="font-semibold text-[#1c2a1f]">
+                    <p className="text-base font-bold text-[#1c2a1f]">
                       {item.nome}
                     </p>
                     {item.escolhas?.length > 0 && (
@@ -467,7 +511,7 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
                         {item.escolhas.map((e) => e.produtoNome).join(", ")}
                       </p>
                     )}
-                    <p className="text-xs text-[#8b968a]">
+                    <p className="text-sm text-[#8b968a]">
                       {formatoMoeda.format(item.preco)} cada
                     </p>
                   </div>
@@ -475,17 +519,17 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
                     <button
                       type="button"
                       onClick={() => alterarQuantidade(item.chave, -1)}
-                      className="h-6 w-6 rounded-full border border-[#dcdfd2] text-[#1c2a1f] hover:bg-[#f6f4ee]"
+                      className="h-7 w-7 rounded-full border border-[#dcdfd2] text-base text-[#1c2a1f] hover:bg-[#f6f4ee]"
                     >
                       −
                     </button>
-                    <span className="w-4 text-center font-semibold">
+                    <span className="w-6 text-center text-base font-bold text-[#1c2a1f]">
                       {item.quantidade}
                     </span>
                     <button
                       type="button"
                       onClick={() => alterarQuantidade(item.chave, 1)}
-                      className="h-6 w-6 rounded-full border border-[#dcdfd2] text-[#1c2a1f] hover:bg-[#f6f4ee]"
+                      className="h-7 w-7 rounded-full border border-[#dcdfd2] text-base text-[#1c2a1f] hover:bg-[#f6f4ee]"
                     >
                       +
                     </button>
@@ -521,17 +565,19 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
           </div>
         )}
 
-        {/* Desconto */}
+        {/* Desconto — livre, sem senha de gerente. O master é avisado
+            depois de qualquer pedido com desconto. */}
         <details className="mt-4 rounded-lg border border-[#dcdfd2] p-3">
           <summary className="cursor-pointer text-xs font-semibold text-[#1c2a1f]">
-            Desconto {descontoAutorizado ? "✓ aplicado" : ""}
+            Desconto {descontoAplicado ? "✓ aplicado" : ""}
           </summary>
 
-          {descontoAutorizado ? (
+          {descontoAplicado ? (
             <div className="mt-2 space-y-2">
               <p className="text-xs text-[#1f6f3e]">
-                Desconto de {formatoMoeda.format(descontoAutorizado.valor)}{" "}
-                autorizado por {descontoAutorizado.autorizadoPorNome}.
+                Desconto de {formatoMoeda.format(descontoAplicado.valor)}{" "}
+                aplicado.
+                {descontoAplicado.motivo ? ` Motivo: ${descontoAplicado.motivo}.` : ""}
               </p>
               <button
                 type="button"
@@ -543,9 +589,9 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
             </div>
           ) : (
             <div className="mt-2 space-y-2">
-              {erroAutorizacao && (
+              {erroDesconto && (
                 <div className="rounded-lg bg-[#fbeae6] p-2 text-xs text-[#8a3320]">
-                  {erroAutorizacao}
+                  {erroDesconto}
                 </div>
               )}
               <div>
@@ -573,38 +619,15 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
                   placeholder="Ex: cliente fidelidade"
                 />
               </div>
-              <p className="mt-1 text-xs text-[#8b968a]">
-                Precisa da senha de um gerente ou admin pra autorizar:
+              <p className="text-xs text-[#8b968a]">
+                O master recebe um aviso de todo pedido com desconto.
               </p>
-              <div>
-                <label className="block text-xs font-medium text-[#1c2a1f]">
-                  E-mail do gerente/admin
-                </label>
-                <input
-                  type="email"
-                  value={emailGerente}
-                  onChange={(e) => setEmailGerente(e.target.value)}
-                  className={campoClasse}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#1c2a1f]">
-                  Senha
-                </label>
-                <input
-                  type="password"
-                  value={senhaGerente}
-                  onChange={(e) => setSenhaGerente(e.target.value)}
-                  className={campoClasse}
-                />
-              </div>
               <button
                 type="button"
-                disabled={autorizando}
-                onClick={autorizar}
-                className="w-full rounded-lg border border-[#1f6f3e] px-3 py-1.5 text-xs font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee] disabled:opacity-50"
+                onClick={aplicarDesconto}
+                className="w-full rounded-lg border border-[#1f6f3e] px-3 py-1.5 text-xs font-semibold text-[#1f6f3e] transition hover:bg-[#f6f4ee]"
               >
-                {autorizando ? "Autorizando..." : "Autorizar desconto"}
+                Aplicar desconto
               </button>
             </div>
           )}
@@ -615,13 +638,13 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
             <span>Subtotal</span>
             <span>{formatoMoeda.format(subtotalGeral)}</span>
           </div>
-          {descontoAutorizado && (
+          {descontoAplicado && (
             <div className="flex items-center justify-between text-[#b3432f]">
               <span>Desconto</span>
-              <span>− {formatoMoeda.format(descontoAutorizado.valor)}</span>
+              <span>− {formatoMoeda.format(descontoAplicado.valor)}</span>
             </div>
           )}
-          <div className="flex items-center justify-between text-base font-bold text-[#1c2a1f]">
+          <div className="flex items-center justify-between text-lg font-bold text-[#1c2a1f]">
             <span>Total</span>
             <span>{formatoMoeda.format(total)}</span>
           </div>
@@ -672,7 +695,7 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
           type="button"
           disabled={!carrinho.length || pending}
           onClick={finalizar}
-          className="mt-4 w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#195c33] disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 w-full rounded-lg bg-[#1f6f3e] px-4 py-3 text-lg font-bold text-white transition hover:bg-[#195c33] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending
             ? "Finalizando..."

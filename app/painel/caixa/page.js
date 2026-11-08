@@ -21,19 +21,52 @@ const NOMES_FORMA = {
   outros: "Outros",
 };
 
-function calcularResumo(caixa, pagamentos, movimentacoes) {
+const NOMES_APROVACAO = {
+  pendente: "Aguardando aprovação do master",
+  aprovado: "Aprovado pelo master",
+  reprovado: "Reprovado pelo master",
+};
+
+const CORES_APROVACAO = {
+  pendente: "text-[#b08900]",
+  aprovado: "text-[#1f6f3e]",
+  reprovado: "text-[#b3432f]",
+};
+
+function calcularResumo(caixa, pagamentos, movimentacoes, pedidos, itensPedido) {
   const inicio = new Date(caixa.aberto_em).getTime();
   const fim = caixa.fechado_em
     ? new Date(caixa.fechado_em).getTime()
     : Infinity;
 
-  const pagamentosDoCaixa = pagamentos.filter((p) => {
-    const t = new Date(p.criado_em).getTime();
+  const pedidosDoCaixaBrutos = (pedidos ?? []).filter((p) => {
+    const t = new Date(p.pago_em).getTime();
     return t >= inicio && t < fim;
   });
-  const movimentacoesDoCaixa = movimentacoes.filter(
+  const idsPedidos = new Set(pedidosDoCaixaBrutos.map((p) => p.id));
+
+  const pagamentosDoCaixa = (pagamentos ?? []).filter((p) =>
+    idsPedidos.has(p.pedido_id)
+  );
+  const movimentacoesDoCaixa = (movimentacoes ?? []).filter(
     (m) => m.caixa_id === caixa.id
   );
+
+  const formaPorPedido = {};
+  for (const p of pagamentosDoCaixa) {
+    formaPorPedido[p.pedido_id] = p.forma;
+  }
+
+  const pedidosDoCaixa = pedidosDoCaixaBrutos
+    .map((p) => ({ ...p, forma: formaPorPedido[p.id] ?? "outros" }))
+    .sort((a, b) => new Date(b.pago_em) - new Date(a.pago_em));
+
+  const quantidadePorProduto = {};
+  for (const item of itensPedido ?? []) {
+    if (!idsPedidos.has(item.pedido_id)) continue;
+    quantidadePorProduto[item.nome_snapshot] =
+      (quantidadePorProduto[item.nome_snapshot] ?? 0) + Number(item.quantidade);
+  }
 
   const totalPorForma = {};
   for (const p of pagamentosDoCaixa) {
@@ -59,6 +92,8 @@ function calcularResumo(caixa, pagamentos, movimentacoes) {
     totalSangria,
     totalSuprimento,
     dinheiroEsperado,
+    pedidosDoCaixa,
+    quantidadePorProduto,
   };
 }
 
@@ -79,16 +114,15 @@ export default async function CaixaPage({ searchParams }) {
 
   const { data: meuPerfil } = await supabase
     .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
+    .select("master, secoes_bloqueadas")
     .eq("id", user.id)
     .maybeSingle();
 
   const podeVender = temAcesso("/painel/caixa", {
-    papel: meuPerfil?.papel,
     master: meuPerfil?.master,
     secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
   });
-  const podeGerenciar = ["admin", "gerente"].includes(meuPerfil?.papel);
+  const podeGerenciar = meuPerfil?.master === true;
 
   if (!podeVender) {
     redirect("/painel");
@@ -97,7 +131,7 @@ export default async function CaixaPage({ searchParams }) {
   const { data: caixas } = await supabase
     .from("caixas")
     .select(
-      "id, aberto_em, valor_abertura, fechado_em, valor_contado, observacoes"
+      "id, aberto_em, valor_abertura, fechado_em, fechado_por, valor_contado, valor_maquineta_stone, valor_maquineta_pagseguro, valor_dinheiro, valor_deposito, status_aprovacao, aprovado_em, observacao_aprovacao, observacoes"
     )
     .order("aberto_em", { ascending: false });
 
@@ -106,7 +140,16 @@ export default async function CaixaPage({ searchParams }) {
 
   const { data: pagamentos } = await supabase
     .from("pagamentos")
-    .select("forma, valor, criado_em");
+    .select("pedido_id, forma, valor, criado_em");
+
+  const { data: pedidos } = await supabase
+    .from("pedidos")
+    .select("id, numero_senha, subtotal, desconto, total, pago_em")
+    .eq("status", "pago");
+
+  const { data: itensPedido } = await supabase
+    .from("itens_pedido")
+    .select("pedido_id, nome_snapshot, quantidade");
 
   const { data: movimentacoes } = await supabase
     .from("movimentacoes_caixa")
@@ -125,7 +168,7 @@ export default async function CaixaPage({ searchParams }) {
   });
 
   const resumo = caixaAberto
-    ? calcularResumo(caixaAberto, pagamentos ?? [], movimentacoes ?? [])
+    ? calcularResumo(caixaAberto, pagamentos ?? [], movimentacoes ?? [], pedidos ?? [], itensPedido ?? [])
     : null;
 
   return (
@@ -213,6 +256,39 @@ export default async function CaixaPage({ searchParams }) {
               </p>
             </div>
 
+            {/* Detalhamento por pedido + resumo de produtos */}
+            {resumo.pedidosDoCaixa.length > 0 && (
+              <details className="mt-4 rounded-xl border border-[#dcdfd2] bg-white p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-[#1c2a1f]">
+                  Detalhamento dos pedidos ({resumo.pedidosDoCaixa.length})
+                </summary>
+                <div className="mt-3 space-y-1 border-b border-[#eceae0] pb-3 text-xs">
+                  {resumo.pedidosDoCaixa.map((p) => (
+                    <p key={p.id} className="flex items-center justify-between text-[#1c2a1f]">
+                      <span>
+                        Pedido nº {p.numero_senha} — {NOMES_FORMA[p.forma] ?? p.forma}
+                        {p.desconto > 0 ? ` (desconto ${formatoMoeda.format(p.desconto)})` : ""}
+                      </span>
+                      <span className="font-semibold">{formatoMoeda.format(p.total)}</span>
+                    </p>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs font-bold uppercase tracking-wide text-[#5b6b5c]">
+                  Quantidade vendida por produto
+                </p>
+                <div className="mt-1 space-y-0.5 text-xs">
+                  {Object.entries(resumo.quantidadePorProduto)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([nome, qtd]) => (
+                      <p key={nome} className="flex items-center justify-between text-[#1c2a1f]">
+                        <span>{nome}</span>
+                        <span className="font-semibold">{qtd}x</span>
+                      </p>
+                    ))}
+                </div>
+              </details>
+            )}
+
             {/* Sangria / suprimento */}
             <details className="mt-4 rounded-xl border border-[#dcdfd2] bg-[#f6f4ee] p-4">
               <summary className="cursor-pointer text-sm font-semibold text-[#1c2a1f]">
@@ -278,18 +354,63 @@ export default async function CaixaPage({ searchParams }) {
               </summary>
               <form action={fecharCaixa} className="mt-3 space-y-3">
                 <input type="hidden" name="caixa_id" value={caixaAberto.id} />
-                <div>
-                  <label className="block text-sm font-medium text-[#1c2a1f]">
-                    Valor contado na gaveta (R$)
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    name="valor_contado"
-                    required
-                    className={campoClasse}
-                    placeholder={formatoMoeda.format(resumo.dinheiroEsperado)}
-                  />
+                <p className="text-xs text-[#5b6b5c]">
+                  Dinheiro esperado na gaveta:{" "}
+                  <strong>{formatoMoeda.format(resumo.dinheiroEsperado)}</strong>
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-[#1c2a1f]">
+                      Maquineta Stone (R$)
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      name="valor_maquineta_stone"
+                      defaultValue="0,00"
+                      required
+                      className={campoClasse}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#1c2a1f]">
+                      Maquineta PagSeguro (R$)
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      name="valor_maquineta_pagseguro"
+                      defaultValue="0,00"
+                      required
+                      className={campoClasse}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#1c2a1f]">
+                      Dinheiro (R$)
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      name="valor_dinheiro"
+                      defaultValue="0,00"
+                      required
+                      className={campoClasse}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#1c2a1f]">
+                      Depósito bancário (R$)
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      name="valor_deposito"
+                      defaultValue="0,00"
+                      required
+                      className={campoClasse}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[#1c2a1f]">
@@ -301,6 +422,10 @@ export default async function CaixaPage({ searchParams }) {
                     className={campoClasse}
                   />
                 </div>
+                <p className="text-xs text-[#8b968a]">
+                  Depois de fechar, o master recebe um aviso e pode aprovar
+                  ou reprovar o fechamento.
+                </p>
                 <button
                   type="submit"
                   className="w-full rounded-lg bg-[#1f6f3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#195c33] sm:w-auto"
@@ -318,7 +443,7 @@ export default async function CaixaPage({ searchParams }) {
           <p className="mt-1 text-sm text-[#5b6b5c]">
             Histórico de caixas já encerrados.
             {podeGerenciar
-              ? " Como administrador/gerente, você pode corrigir os valores de um caixa já fechado."
+              ? " Como master, você pode corrigir os valores de um caixa já fechado."
               : ""}
           </p>
 
@@ -332,7 +457,9 @@ export default async function CaixaPage({ searchParams }) {
                 const resumoCaixa = calcularResumo(
                   caixa,
                   pagamentos ?? [],
-                  movimentacoes ?? []
+                  movimentacoes ?? [],
+                  pedidos ?? [],
+                  itensPedido ?? []
                 );
                 const diferenca =
                   (caixa.valor_contado ?? 0) - resumoCaixa.dinheiroEsperado;
@@ -347,6 +474,20 @@ export default async function CaixaPage({ searchParams }) {
                       {formatoDataHora.format(new Date(caixa.fechado_em))} —{" "}
                       {formatoMoeda.format(resumoCaixa.totalVendas)} em vendas
                     </summary>
+
+                    <p
+                      className={
+                        "mt-2 text-xs font-bold " +
+                        (CORES_APROVACAO[caixa.status_aprovacao] ?? "text-[#5b6b5c]")
+                      }
+                    >
+                      {NOMES_APROVACAO[caixa.status_aprovacao] ?? caixa.status_aprovacao}
+                    </p>
+                    {caixa.observacao_aprovacao && (
+                      <p className="mt-1 text-xs text-[#5b6b5c]">
+                        Observação do master: {caixa.observacao_aprovacao}
+                      </p>
+                    )}
 
                     <div className="mt-3 space-y-1 text-sm">
                       <p className="text-[#5b6b5c]">
@@ -380,6 +521,12 @@ export default async function CaixaPage({ searchParams }) {
                         Valor contado:{" "}
                         {formatoMoeda.format(caixa.valor_contado ?? 0)}
                       </p>
+                      <div className="pl-3 text-xs text-[#5b6b5c]">
+                        <p>Maquineta Stone: {formatoMoeda.format(caixa.valor_maquineta_stone ?? 0)}</p>
+                        <p>Maquineta PagSeguro: {formatoMoeda.format(caixa.valor_maquineta_pagseguro ?? 0)}</p>
+                        <p>Dinheiro: {formatoMoeda.format(caixa.valor_dinheiro ?? 0)}</p>
+                        <p>Depósito bancário: {formatoMoeda.format(caixa.valor_deposito ?? 0)}</p>
+                      </div>
                       <p
                         className={
                           diferenca === 0
@@ -398,6 +545,38 @@ export default async function CaixaPage({ searchParams }) {
                         </p>
                       )}
                     </div>
+
+                    {resumoCaixa.pedidosDoCaixa.length > 0 && (
+                      <details className="mt-3 rounded-lg border border-[#dcdfd2] p-3">
+                        <summary className="cursor-pointer text-xs font-semibold text-[#1c2a1f]">
+                          Detalhamento dos pedidos ({resumoCaixa.pedidosDoCaixa.length})
+                        </summary>
+                        <div className="mt-2 space-y-1 border-b border-[#eceae0] pb-2 text-xs">
+                          {resumoCaixa.pedidosDoCaixa.map((p) => (
+                            <p key={p.id} className="flex items-center justify-between text-[#1c2a1f]">
+                              <span>
+                                Pedido nº {p.numero_senha} — {NOMES_FORMA[p.forma] ?? p.forma}
+                                {p.desconto > 0 ? ` (desconto ${formatoMoeda.format(p.desconto)})` : ""}
+                              </span>
+                              <span className="font-semibold">{formatoMoeda.format(p.total)}</span>
+                            </p>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-xs font-bold uppercase tracking-wide text-[#5b6b5c]">
+                          Quantidade vendida por produto
+                        </p>
+                        <div className="mt-1 space-y-0.5 text-xs">
+                          {Object.entries(resumoCaixa.quantidadePorProduto)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([nome, qtd]) => (
+                              <p key={nome} className="flex items-center justify-between text-[#1c2a1f]">
+                                <span>{nome}</span>
+                                <span className="font-semibold">{qtd}x</span>
+                              </p>
+                            ))}
+                        </div>
+                      </details>
+                    )}
 
                     {podeGerenciar && (
                       <details className="mt-3 rounded-lg border border-[#dcdfd2] bg-[#f6f4ee] p-3">
@@ -427,19 +606,63 @@ export default async function CaixaPage({ searchParams }) {
                               className={campoClasse}
                             />
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-[#1c2a1f]">
-                              Valor contado na gaveta (R$)
-                            </label>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              name="valor_contado"
-                              defaultValue={(caixa.valor_contado ?? 0)
-                                .toFixed(2)
-                                .replace(".", ",")}
-                              className={campoClasse}
-                            />
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div>
+                              <label className="block text-xs font-medium text-[#1c2a1f]">
+                                Maquineta Stone (R$)
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                name="valor_maquineta_stone"
+                                defaultValue={(caixa.valor_maquineta_stone ?? 0)
+                                  .toFixed(2)
+                                  .replace(".", ",")}
+                                className={campoClasse}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-[#1c2a1f]">
+                                Maquineta PagSeguro (R$)
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                name="valor_maquineta_pagseguro"
+                                defaultValue={(caixa.valor_maquineta_pagseguro ?? 0)
+                                  .toFixed(2)
+                                  .replace(".", ",")}
+                                className={campoClasse}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-[#1c2a1f]">
+                                Dinheiro (R$)
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                name="valor_dinheiro"
+                                defaultValue={(caixa.valor_dinheiro ?? 0)
+                                  .toFixed(2)
+                                  .replace(".", ",")}
+                                className={campoClasse}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-[#1c2a1f]">
+                                Depósito bancário (R$)
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                name="valor_deposito"
+                                defaultValue={(caixa.valor_deposito ?? 0)
+                                  .toFixed(2)
+                                  .replace(".", ",")}
+                                className={campoClasse}
+                              />
+                            </div>
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-[#1c2a1f]">

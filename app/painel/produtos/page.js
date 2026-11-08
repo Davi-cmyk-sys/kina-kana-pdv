@@ -1,7 +1,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { temAcesso } from "@/lib/permissoes";
-import { criarCategoria, criarProduto, apagarProduto, apagarCategoria } from "./actions";
+import {
+  criarCategoria,
+  criarProduto,
+  editarProduto,
+  apagarProduto,
+  apagarCategoria,
+} from "./actions";
 import BotaoApagar from "@/components/BotaoApagar";
 
 const campoClasse =
@@ -45,7 +51,9 @@ export default async function ProdutosPage({ searchParams }) {
 
   const { data: produtos } = await supabase
     .from("produtos")
-    .select("id, nome, descricao, preco, custo, imagem, disponivel, categoria_id")
+    .select(
+      "id, codigo, nome, descricao, preco, custo, imagem, disponivel, categoria_id"
+    )
     .order("nome", { ascending: true });
 
   const formatoMoeda = new Intl.NumberFormat("pt-BR", {
@@ -124,7 +132,11 @@ export default async function ProdutosPage({ searchParams }) {
               Cadastre uma categoria primeiro.
             </p>
           ) : (
-            <form action={criarProduto} className="mt-3 space-y-3">
+            <form
+              action={criarProduto}
+              encType="multipart/form-data"
+              className="mt-3 space-y-3"
+            >
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-[#1c2a1f]">
@@ -176,6 +188,17 @@ export default async function ProdutosPage({ searchParams }) {
                     placeholder="3,50"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1c2a1f]">
+                    Código (SKU, opcional)
+                  </label>
+                  <input
+                    type="text"
+                    name="codigo"
+                    className={campoClasse}
+                    placeholder="Ex: PAST-001"
+                  />
+                </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-[#1c2a1f]">
                     Descrição (opcional)
@@ -189,15 +212,18 @@ export default async function ProdutosPage({ searchParams }) {
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-[#1c2a1f]">
-                    Imagem (emoji, por enquanto)
+                    Foto do produto (opcional)
                   </label>
                   <input
-                    type="text"
-                    name="imagem"
-                    maxLength={4}
+                    type="file"
+                    name="imagem_arquivo"
+                    accept="image/*"
                     className={campoClasse}
-                    placeholder="🥟"
                   />
+                  <p className="mt-1 text-xs text-[#8b968a]">
+                    Se não enviar uma foto, o produto aparece com um emoji no
+                    lugar da imagem.
+                  </p>
                 </div>
               </div>
               <button
@@ -246,38 +272,186 @@ export default async function ProdutosPage({ searchParams }) {
                   </p>
                 ) : (
                   <div className="mt-2 divide-y divide-[#eceae0] overflow-hidden rounded-xl border border-[#dcdfd2]">
-                    {produtosDaCategoria.map((produto) => (
-                      <div
-                        key={produto.id}
-                        className="flex items-center justify-between gap-3 bg-white p-3"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold text-[#1c2a1f]">
-                            {produto.imagem ? `${produto.imagem} ` : ""}
-                            {produto.nome}
-                          </p>
-                          {produto.descricao && (
-                            <p className="text-xs text-[#8b968a]">
-                              {produto.descricao}
-                            </p>
-                          )}
+                    {produtosDaCategoria.map((produto) => {
+                      const temFoto =
+                        typeof produto.imagem === "string" &&
+                        produto.imagem.startsWith("http");
+                      return (
+                        <div key={produto.id} className="bg-white p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              {temFoto ? (
+                                <img
+                                  src={produto.imagem}
+                                  alt={produto.nome}
+                                  className="h-10 w-10 rounded-lg object-cover"
+                                />
+                              ) : (
+                                <span className="text-xl">
+                                  {produto.imagem || "🍽️"}
+                                </span>
+                              )}
+                              <div>
+                                <p className="text-sm font-semibold text-[#1c2a1f]">
+                                  {produto.nome}
+                                  {produto.codigo && (
+                                    <span className="ml-1.5 rounded bg-[#eceae0] px-1.5 py-0.5 text-[10px] font-mono font-normal text-[#5b6b5c]">
+                                      {produto.codigo}
+                                    </span>
+                                  )}
+                                </p>
+                                {produto.descricao && (
+                                  <p className="text-xs text-[#8b968a]">
+                                    {produto.descricao}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right text-sm">
+                              <p className="font-semibold text-[#1c2a1f]">
+                                {formatoMoeda.format(produto.preco)}
+                              </p>
+                              <BotaoApagar
+                                acao={apagarProduto}
+                                campos={{ id: produto.id, nome: produto.nome }}
+                                confirmacao={`Apagar o produto "${produto.nome}"?`}
+                                className="mt-1 text-xs font-medium text-[#b3432f] hover:underline"
+                              />
+                              <p className="text-xs text-[#8b968a]">
+                                custo {formatoMoeda.format(produto.custo)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs font-medium text-[#1f6f3e]">
+                              Editar produto
+                            </summary>
+                            <form
+                              action={editarProduto}
+                              encType="multipart/form-data"
+                              className="mt-2 space-y-2 rounded-lg bg-[#f6f4ee] p-3"
+                            >
+                              <input type="hidden" name="id" value={produto.id} />
+                              <input
+                                type="hidden"
+                                name="nome_atual"
+                                value={produto.nome}
+                              />
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <div>
+                                  <label className="block text-xs font-medium text-[#1c2a1f]">
+                                    Categoria
+                                  </label>
+                                  <select
+                                    name="categoria_id"
+                                    required
+                                    defaultValue={produto.categoria_id}
+                                    className={campoClasse}
+                                  >
+                                    {categorias.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.icone ? `${c.icone} ` : ""}
+                                        {c.nome}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-[#1c2a1f]">
+                                    Nome do produto
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="nome"
+                                    required
+                                    defaultValue={produto.nome}
+                                    className={campoClasse}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-[#1c2a1f]">
+                                    Preço de venda (R$)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    name="preco"
+                                    required
+                                    defaultValue={String(produto.preco).replace(
+                                      ".",
+                                      ","
+                                    )}
+                                    className={campoClasse}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-[#1c2a1f]">
+                                    Custo (R$)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    name="custo"
+                                    defaultValue={String(
+                                      produto.custo ?? ""
+                                    ).replace(".", ",")}
+                                    className={campoClasse}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-[#1c2a1f]">
+                                    Código (SKU)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="codigo"
+                                    defaultValue={produto.codigo ?? ""}
+                                    className={campoClasse}
+                                    placeholder="Ex: PAST-001"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-[#1c2a1f]">
+                                  Descrição
+                                </label>
+                                <input
+                                  type="text"
+                                  name="descricao"
+                                  defaultValue={produto.descricao ?? ""}
+                                  className={campoClasse}
+                                  placeholder="Ex: Recheio de carne moída temperada"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-[#1c2a1f]">
+                                  {temFoto ? "Trocar foto" : "Adicionar foto"}
+                                </label>
+                                <input
+                                  type="file"
+                                  name="imagem_arquivo"
+                                  accept="image/*"
+                                  className={campoClasse}
+                                />
+                              </div>
+                              {temFoto && (
+                                <label className="flex items-center gap-2 text-xs text-[#8b968a]">
+                                  <input type="checkbox" name="remover_imagem" />
+                                  Remover a foto atual (volta a mostrar o emoji)
+                                </label>
+                              )}
+                              <button
+                                type="submit"
+                                className="rounded-lg bg-[#1f6f3e] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#195c33]"
+                              >
+                                Salvar
+                              </button>
+                            </form>
+                          </details>
                         </div>
-                        <div className="text-right text-sm">
-                          <p className="font-semibold text-[#1c2a1f]">
-                            {formatoMoeda.format(produto.preco)}
-                          </p>
-                          <BotaoApagar
-                            acao={apagarProduto}
-                            campos={{ id: produto.id, nome: produto.nome }}
-                            confirmacao={`Apagar o produto "${produto.nome}"?`}
-                            className="mt-1 text-xs font-medium text-[#b3432f] hover:underline"
-                          />
-                          <p className="text-xs text-[#8b968a]">
-                            custo {formatoMoeda.format(produto.custo)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

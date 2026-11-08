@@ -37,7 +37,7 @@ export default async function PedidoPage() {
 
   const { data: produtos } = await supabase
     .from("produtos")
-    .select("id, nome, preco, imagem, categoria_id, disponivel")
+    .select("id, nome, descricao, preco, imagem, categoria_id, disponivel")
     .eq("disponivel", true)
     .order("nome", { ascending: true });
 
@@ -85,8 +85,7 @@ export default async function PedidoPage() {
       <h1 className="text-2xl font-bold text-[#1c2a1f]">Novo Pedido</h1>
       <p className="mt-1 text-sm text-[#5b6b5c]">
         Clique nos produtos ou combos para montar o pedido. Adicione
-        adicionais em cada item e, se precisar, aplique um desconto com
-        autorização de um gerente/admin.
+        adicionais em cada item e, se precisar, aplique um desconto direto.
       </p>
 
       <NovoPedido

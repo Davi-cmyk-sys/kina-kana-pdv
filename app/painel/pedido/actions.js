@@ -13,12 +13,49 @@ function subtotalDoItem(item) {
   return item.preco * item.quantidade + totalAdicionais;
 }
 
+const centavos = (valor) => Math.round(Number(valor) * 100) / 100;
+
+// Pagamento em 1 ou 2 formas. Com 2, vale o valor digitado para a 1ª forma
+// e a 2ª fica com o restante — calculado aqui no servidor, a partir do
+// total que o próprio servidor calculou, para a soma bater sempre.
+function montarPartesPagamento(pagamento, total) {
+  const formas = Array.isArray(pagamento?.formas)
+    ? pagamento.formas
+    : pagamento?.forma
+    ? [{ forma: pagamento.forma }]
+    : [];
+
+  if (formas.length < 1 || formas.length > 2) {
+    return { erro: "Escolha uma ou duas formas de pagamento." };
+  }
+  if (formas.some((f) => !FORMAS_VALIDAS.includes(f?.forma))) {
+    return { erro: "Escolha a forma de pagamento." };
+  }
+  if (formas.length === 2 && formas[0].forma === formas[1].forma) {
+    return { erro: "As duas formas de pagamento precisam ser diferentes." };
+  }
+
+  if (formas.length === 1) {
+    return { partes: [{ forma: formas[0].forma, valor: centavos(total) }] };
+  }
+
+  const primeira = centavos(formas[0].valor);
+  if (!Number.isFinite(primeira) || primeira <= 0 || primeira >= total) {
+    return {
+      erro: "Na divisão, o valor da 1ª forma precisa ser maior que zero e menor que o total.",
+    };
+  }
+  return {
+    partes: [
+      { forma: formas[0].forma, valor: primeira },
+      { forma: formas[1].forma, valor: centavos(total - primeira) },
+    ],
+  };
+}
+
 export async function criarPedido({ itens, desconto, pagamento }) {
   if (!itens || itens.length === 0) {
     return { erro: "O carrinho está vazio." };
-  }
-  if (!pagamento?.forma || !FORMAS_VALIDAS.includes(pagamento.forma)) {
-    return { erro: "Escolha a forma de pagamento." };
   }
 
   try {
@@ -57,10 +94,20 @@ export async function criarPedido({ itens, desconto, pagamento }) {
       desconto?.valor > 0 ? Math.min(Number(desconto.valor), subtotal) : 0;
     const total = Math.max(subtotal - valorDesconto, 0);
 
-    const recebido = Number(pagamento.recebido) || 0;
+    const { partes, erro: erroPagamentoInformado } = montarPartesPagamento(
+      pagamento,
+      total
+    );
+    if (erroPagamentoInformado) {
+      return { erro: erroPagamentoInformado };
+    }
+
+    // Troco só sobre a parte paga em dinheiro.
+    const parteDinheiro = partes.find((p) => p.forma === "dinheiro")?.valor ?? 0;
+    const recebido = Number(String(pagamento?.recebido ?? "").replace(",", ".")) || 0;
     const troco =
-      pagamento.forma === "dinheiro" && recebido > total
-        ? recebido - total
+      parteDinheiro > 0 && recebido > parteDinheiro
+        ? centavos(recebido - parteDinheiro)
         : 0;
 
     const { data: pedido, error: erroPedido } = await supabase
@@ -173,13 +220,20 @@ export async function criarPedido({ itens, desconto, pagamento }) {
       console.error("Erro ao dar baixa no estoque:", err);
     }
 
-    const { error: erroPagamento } = await supabase.from("pagamentos").insert({
-      pedido_id: pedido.id,
-      forma: pagamento.forma,
-      valor: total,
-      troco,
-      registrado_por: user.id,
-    });
+    // Pedido de valor zero (desconto de 100%) não tem pagamento a registrar.
+    const linhasPagamento = partes
+      .filter((p) => p.valor > 0)
+      .map((p) => ({
+        pedido_id: pedido.id,
+        forma: p.forma,
+        valor: p.valor,
+        troco: p.forma === "dinheiro" ? troco : 0,
+        registrado_por: user.id,
+      }));
+
+    const { error: erroPagamento } = linhasPagamento.length
+      ? await supabase.from("pagamentos").insert(linhasPagamento)
+      : { error: null };
 
     if (erroPagamento) {
       return {
@@ -209,7 +263,13 @@ export async function criarPedido({ itens, desconto, pagamento }) {
       });
     }
 
-    return { sucesso: true, numeroSenha: pedido.numero_senha, troco };
+    return {
+      sucesso: true,
+      numeroSenha: pedido.numero_senha,
+      total,
+      troco,
+      pagamentos: partes,
+    };
   } catch (err) {
     console.error("Erro ao criar pedido:", err);
     return {

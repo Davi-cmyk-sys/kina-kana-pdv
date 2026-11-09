@@ -49,13 +49,14 @@ function calcularResumo(caixa, pagamentos, movimentacoes, pedidos, itensPedido) 
     (m) => m.caixa_id === caixa.id
   );
 
-  const formaPorPedido = {};
+  // Um pedido pode ter sido pago em até 2 formas.
+  const formasPorPedido = {};
   for (const p of pagamentosDoCaixa) {
-    formaPorPedido[p.pedido_id] = p.forma;
+    (formasPorPedido[p.pedido_id] ??= []).push(p.forma);
   }
 
   const pedidosDoCaixa = pedidosDoCaixaBrutos
-    .map((p) => ({ ...p, forma: formaPorPedido[p.id] ?? "outros" }))
+    .map((p) => ({ ...p, formas: formasPorPedido[p.id] ?? ["outros"] }))
     .sort((a, b) => new Date(b.pago_em) - new Date(a.pago_em));
 
   const quantidadePorProduto = {};
@@ -306,7 +307,7 @@ export default async function CaixaPage({ searchParams }) {
                   {resumo.pedidosDoCaixa.map((p) => (
                     <p key={p.id} className="flex items-center justify-between text-[#1c2a1f]">
                       <span>
-                        Pedido nº {p.numero_senha} — {nomeDaForma(p.forma)}
+                        Pedido nº {p.numero_senha} — {p.formas.map(nomeDaForma).join(" + ")}
                         {p.desconto > 0 ? ` (desconto ${formatoMoeda.format(p.desconto)})` : ""}
                       </span>
                       <span className="font-semibold">{formatoMoeda.format(p.total)}</span>
@@ -588,7 +589,7 @@ export default async function CaixaPage({ searchParams }) {
                           {resumoCaixa.pedidosDoCaixa.map((p) => (
                             <p key={p.id} className="flex items-center justify-between text-[#1c2a1f]">
                               <span>
-                                Pedido nº {p.numero_senha} — {nomeDaForma(p.forma)}
+                                Pedido nº {p.numero_senha} — {p.formas.map(nomeDaForma).join(" + ")}
                                 {p.desconto > 0 ? ` (desconto ${formatoMoeda.format(p.desconto)})` : ""}
                               </span>
                               <span className="font-semibold">{formatoMoeda.format(p.total)}</span>

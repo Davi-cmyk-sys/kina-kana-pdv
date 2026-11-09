@@ -136,7 +136,14 @@ export default async function PedidosPage({ searchParams }) {
                 desconto: pedido.desconto ?? 0,
                 total: pedido.total,
                 formaPagamento: pagamentosDoPedido?.[0]?.forma ?? "outros",
-                troco: pagamentosDoPedido?.[0]?.troco ?? 0,
+                pagamentos: (pagamentosDoPedido ?? []).map((p) => ({
+                  forma: p.forma,
+                  valor: p.valor,
+                })),
+                troco: (pagamentosDoPedido ?? []).reduce(
+                  (soma, p) => soma + (p.troco ?? 0),
+                  0
+                ),
               };
 
               return (

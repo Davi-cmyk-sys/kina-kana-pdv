@@ -1,18 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { nomeDaForma, ordemDaForma } from "@/lib/formasPagamento";
 import { temAcesso } from "@/lib/permissoes";
 import ExportarCsv from "./ExportarCsv";
 
-const NOMES_FORMA = {
-  dinheiro: "Dinheiro",
-  pix: "Pix",
-  credito: "Cartão de crédito",
-  debito: "Cartão de débito",
-  vale_refeicao: "Vale-refeição",
-  vale_alimentacao: "Vale-alimentação",
-  outros: "Outros",
-};
 
 function paraISO(data) {
   return data.toISOString().slice(0, 10);
@@ -163,7 +155,7 @@ export default async function RelatoriosPage({ searchParams }) {
       desconto: pedido.desconto ?? 0,
       total: pedido.total,
       formas: pagamentosDoPedido
-        .map((p) => NOMES_FORMA[p.forma] ?? p.forma)
+        .map((p) => nomeDaForma(p.forma))
         .join(" + "),
       itens: itensDoPedido
         .map((i) => `${i.quantidade}x ${i.nome_snapshot}`)
@@ -317,10 +309,10 @@ export default async function RelatoriosPage({ searchParams }) {
           ) : (
             <div className="mt-2 space-y-1 text-sm">
               {Object.entries(porForma)
-                .sort((a, b) => b[1] - a[1])
+                .sort((a, b) => ordemDaForma(a[0]) - ordemDaForma(b[0]))
                 .map(([forma, valor]) => (
                   <p key={forma} className="text-[#5b6b5c]">
-                    {NOMES_FORMA[forma] ?? forma}:{" "}
+                    {nomeDaForma(forma)}:{" "}
                     <span className="font-semibold text-[#1c2a1f]">
                       {formatoMoeda.format(valor)}
                     </span>

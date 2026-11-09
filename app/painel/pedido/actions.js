@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { notificarMaster } from "@/lib/notificacoes";
+import { FORMAS_VALIDAS } from "@/lib/formasPagamento";
 
 function subtotalDoItem(item) {
   const totalAdicionais = (item.adicionaisSelecionados ?? []).reduce(
@@ -11,16 +12,6 @@ function subtotalDoItem(item) {
   );
   return item.preco * item.quantidade + totalAdicionais;
 }
-
-const FORMAS_VALIDAS = [
-  "dinheiro",
-  "pix",
-  "credito",
-  "debito",
-  "vale_refeicao",
-  "vale_alimentacao",
-  "outros",
-];
 
 export async function criarPedido({ itens, desconto, pagamento }) {
   if (!itens || itens.length === 0) {

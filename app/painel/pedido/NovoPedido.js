@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { criarPedido } from "./actions";
 import { formatarRecibo, imprimirLinhas } from "@/lib/impressora";
+import { FORMAS_PAGAMENTO } from "@/lib/formasPagamento";
+import { normalizarNome } from "@/lib/nomes";
 
 function reciboEmTexto(linhas) {
   return linhas.map((l) => l.texto).join("\n");
@@ -18,6 +20,26 @@ const campoClasse =
 
 function temFotoReal(imagem) {
   return typeof imagem === "string" && imagem.startsWith("http");
+}
+
+// Foto grande no topo do cartão do produto/combo; sem foto, mostra o emoji
+// no mesmo tamanho para os cartões ficarem alinhados.
+function FotoDoCartao({ imagem, nome, emojiPadrao }) {
+  if (temFotoReal(imagem)) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={imagem}
+        alt={nome}
+        className="aspect-[4/3] w-full rounded-lg object-cover"
+      />
+    );
+  }
+  return (
+    <span className="flex aspect-[4/3] w-full items-center justify-center rounded-lg bg-[#f6f4ee] text-5xl">
+      {imagem || emojiPadrao}
+    </span>
+  );
 }
 
 function subtotalDoItem(item) {
@@ -61,6 +83,33 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
   const [formaPagamento, setFormaPagamento] = useState("dinheiro");
   const [recebidoTexto, setRecebidoTexto] = useState("");
 
+  // ---------- busca por código ou nome ----------
+  const [busca, setBusca] = useState("");
+  const termoBusca = normalizarNome(busca);
+  const resultadosBusca = useMemo(() => {
+    if (!termoBusca) return [];
+    return produtos.filter(
+      (p) =>
+        (p.codigo ?? "").toLowerCase().startsWith(termoBusca) ||
+        normalizarNome(p.nome).includes(termoBusca)
+    );
+  }, [produtos, termoBusca]);
+
+  function aoTeclarNaBusca(evento) {
+    if (evento.key !== "Enter") return;
+    evento.preventDefault();
+    // Código exato (ex: 0002) ou um único resultado: já põe no carrinho.
+    const exato = produtos.find(
+      (p) => (p.codigo ?? "").toLowerCase() === termoBusca
+    );
+    const escolhido =
+      exato ?? (resultadosBusca.length === 1 ? resultadosBusca[0] : null);
+    if (escolhido) {
+      adicionarProduto(escolhido);
+      setBusca("");
+    }
+  }
+
   const produtosDaCategoria = useMemo(
     () =>
       abaAtiva && abaAtiva !== "combos"
@@ -68,6 +117,8 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
         : [],
     [produtos, abaAtiva]
   );
+
+  const produtosNaTela = termoBusca ? resultadosBusca : produtosDaCategoria;
 
   function adicionarProduto(produto) {
     setMensagem(null);
@@ -279,12 +330,24 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
           </p>
         ) : (
           <>
+            <input
+              type="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              onKeyDown={aoTeclarNaBusca}
+              className="mb-3 w-full rounded-lg border border-[#dcdfd2] bg-white px-3 py-2.5 text-base text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]"
+              placeholder="Buscar por código ou nome (ex: 0002) e Enter"
+              aria-label="Buscar produto por código ou nome"
+            />
             <div className="flex flex-wrap gap-2">
               {abas.map((aba) => (
                 <button
                   key={aba.chave}
                   type="button"
-                  onClick={() => setAbaAtiva(aba.chave)}
+                  onClick={() => {
+                    setAbaAtiva(aba.chave);
+                    setBusca("");
+                  }}
                   className={
                     "rounded-full px-4 py-2 text-sm font-semibold transition " +
                     (abaAtiva === aba.chave
@@ -297,7 +360,7 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
               ))}
             </div>
 
-            {abaAtiva === "combos" ? (
+            {abaAtiva === "combos" && !termoBusca ? (
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {combos.map((combo) => (
                   <button
@@ -306,15 +369,11 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
                     onClick={() => clicarCombo(combo)}
                     className="flex flex-col items-start rounded-xl border border-[#dcdfd2] bg-white p-3 text-left transition hover:border-[#1f6f3e] hover:shadow-sm"
                   >
-                    {temFotoReal(combo.imagem) ? (
-                      <img
-                        src={combo.imagem}
-                        alt={combo.nome}
-                        className="h-12 w-12 rounded-lg object-cover"
-                      />
-                    ) : (
-                      <span className="text-2xl">{combo.imagem || "🍱"}</span>
-                    )}
+                    <FotoDoCartao
+                      imagem={combo.imagem}
+                      nome={combo.nome}
+                      emojiPadrao="🍱"
+                    />
                     <span className="mt-2 text-base font-bold leading-tight text-[#1c2a1f]">
                       {combo.nome}
                     </span>
@@ -326,30 +385,29 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
               </div>
             ) : (
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {!produtosDaCategoria.length ? (
+                {!produtosNaTela.length ? (
                   <p className="col-span-full text-sm text-[#8b968a]">
-                    Nenhum produto nessa categoria.
+                    {termoBusca
+                      ? "Nenhum produto com esse código ou nome."
+                      : "Nenhum produto nessa categoria."}
                   </p>
                 ) : (
-                  produtosDaCategoria.map((produto) => (
+                  produtosNaTela.map((produto) => (
                     <button
                       key={produto.id}
                       type="button"
                       onClick={() => adicionarProduto(produto)}
                       className="flex flex-col items-start rounded-xl border border-[#dcdfd2] bg-white p-3 text-left transition hover:border-[#1f6f3e] hover:shadow-sm"
                     >
-                      {temFotoReal(produto.imagem) ? (
-                        <img
-                          src={produto.imagem}
-                          alt={produto.nome}
-                          className="h-12 w-12 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <span className="text-2xl">
-                          {produto.imagem || "🍽️"}
-                        </span>
-                      )}
-                      <span className="mt-2 text-base font-bold leading-tight text-[#1c2a1f]">
+                      <FotoDoCartao
+                        imagem={produto.imagem}
+                        nome={produto.nome}
+                        emojiPadrao="🍽️"
+                      />
+                      <span className="mt-2 font-mono text-xs font-semibold text-[#5b6b5c]">
+                        {produto.codigo}
+                      </span>
+                      <span className="text-base font-bold leading-tight text-[#1c2a1f]">
                         {produto.nome}
                       </span>
                       {produto.descricao && (
@@ -655,19 +713,32 @@ export default function NovoPedido({ categorias, produtos, combos, adicionais })
           <p className="text-xs font-semibold text-[#1c2a1f]">
             Forma de pagamento
           </p>
-          <select
-            value={formaPagamento}
-            onChange={(e) => setFormaPagamento(e.target.value)}
-            className={campoClasse}
+          <div
+            role="radiogroup"
+            aria-label="Forma de pagamento"
+            className="mt-2 grid gap-1.5"
           >
-            <option value="dinheiro">Dinheiro</option>
-            <option value="pix">Pix</option>
-            <option value="credito">Cartão de crédito</option>
-            <option value="debito">Cartão de débito</option>
-            <option value="vale_refeicao">Vale-refeição</option>
-            <option value="vale_alimentacao">Vale-alimentação</option>
-            <option value="outros">Outros</option>
-          </select>
+            {FORMAS_PAGAMENTO.map((f) => {
+              const ativa = formaPagamento === f.valor;
+              return (
+                <button
+                  key={f.valor}
+                  type="button"
+                  role="radio"
+                  aria-checked={ativa}
+                  onClick={() => setFormaPagamento(f.valor)}
+                  className={
+                    "rounded-lg border px-3 py-2 text-left text-sm font-semibold transition " +
+                    (ativa
+                      ? "border-[#1f6f3e] bg-[#1f6f3e] text-white"
+                      : "border-[#dcdfd2] bg-white text-[#1c2a1f] hover:bg-[#f6f4ee]")
+                  }
+                >
+                  {f.rotulo}
+                </button>
+              );
+            })}
+          </div>
 
           {formaPagamento === "dinheiro" && (
             <div className="mt-2">

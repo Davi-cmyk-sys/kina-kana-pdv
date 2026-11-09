@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { FORMAS_VALIDAS } from "@/lib/formasPagamento";
 import { registrarAuditoria } from "@/lib/auditoria";
 
 function comErro(mensagem) {
@@ -54,6 +55,9 @@ export async function registrarPagamento(formData) {
   }
   if (!valorTexto || Number.isNaN(valor) || valor <= 0) {
     comErro("Digite um valor de pagamento válido.");
+  }
+  if (!FORMAS_VALIDAS.includes(forma)) {
+    comErro("Escolha a forma de pagamento.");
   }
 
   const troco =

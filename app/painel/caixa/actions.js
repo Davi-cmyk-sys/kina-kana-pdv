@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { FORMAS_PAGAMENTO } from "@/lib/formasPagamento";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { notificarMaster } from "@/lib/notificacoes";
 
@@ -103,6 +104,29 @@ export async function registrarMovimentacao(formData) {
   );
 }
 
+// Lê os valores informados no fechamento, um por forma de pagamento (na
+// sequência oficial). Devolve null se algum estiver inválido.
+function lerValoresFechamento(formData) {
+  const valores = {};
+  for (const forma of FORMAS_PAGAMENTO) {
+    const n = numeroOuZero(formData.get(forma.coluna));
+    if (n === null || n < 0) return null;
+    valores[forma.coluna] = n;
+  }
+  return valores;
+}
+
+function somar(valores) {
+  return Object.values(valores).reduce((s, v) => s + v, 0);
+}
+
+function resumoDasFormas(valores) {
+  return FORMAS_PAGAMENTO.map(
+    (f) =>
+      `${f.rotulo}: R$ ${valores[f.coluna].toFixed(2).replace(".", ",")}`
+  ).join(" · ");
+}
+
 export async function editarCaixa(formData) {
   const caixaId = formData.get("caixa_id")?.toString();
   const valorAberturaTexto = formData
@@ -112,42 +136,38 @@ export async function editarCaixa(formData) {
   const observacoes = formData.get("observacoes")?.toString().trim() || null;
 
   const valorAbertura = Number(valorAberturaTexto);
-
-  const valorStone = numeroOuZero(formData.get("valor_maquineta_stone"));
-  const valorPagSeguro = numeroOuZero(formData.get("valor_maquineta_pagseguro"));
-  const valorDinheiro = numeroOuZero(formData.get("valor_dinheiro"));
-  const valorDeposito = numeroOuZero(formData.get("valor_deposito"));
+  const valores = lerValoresFechamento(formData);
 
   if (!caixaId) comErro("Caixa inválido.");
   if (!valorAberturaTexto || Number.isNaN(valorAbertura) || valorAbertura < 0) {
     comErro("Digite um valor de abertura válido.");
   }
-  if (
-    valorStone === null ||
-    valorPagSeguro === null ||
-    valorDinheiro === null ||
-    valorDeposito === null ||
-    valorStone < 0 ||
-    valorPagSeguro < 0 ||
-    valorDinheiro < 0 ||
-    valorDeposito < 0
-  ) {
-    comErro("Preencha os 4 valores de fechamento corretamente.");
+  if (!valores) {
+    comErro("Preencha os 5 valores de fechamento corretamente.");
   }
 
-  const valorContado = valorStone + valorPagSeguro + valorDinheiro + valorDeposito;
-
   const supabase = await createClient();
+
+  // Caixas antigos podem ter valores nas formas que não existem mais
+  // (Stone, PagSeguro, Depósito). Eles continuam somando no total contado.
+  const { data: caixaAtual } = await supabase
+    .from("caixas")
+    .select("valor_maquineta_stone, valor_maquineta_pagseguro, valor_deposito")
+    .eq("id", caixaId)
+    .maybeSingle();
+  const valoresAntigos =
+    Number(caixaAtual?.valor_maquineta_stone ?? 0) +
+    Number(caixaAtual?.valor_maquineta_pagseguro ?? 0) +
+    Number(caixaAtual?.valor_deposito ?? 0);
+
+  const valorContado = somar(valores) + valoresAntigos;
 
   const { error } = await supabase
     .from("caixas")
     .update({
       valor_abertura: valorAbertura,
       valor_contado: valorContado,
-      valor_maquineta_stone: valorStone,
-      valor_maquineta_pagseguro: valorPagSeguro,
-      valor_dinheiro: valorDinheiro,
-      valor_deposito: valorDeposito,
+      ...valores,
       observacoes,
     })
     .eq("id", caixaId);
@@ -177,27 +197,14 @@ function numeroOuZero(texto) {
 export async function fecharCaixa(formData) {
   const caixaId = formData.get("caixa_id")?.toString();
   const observacoes = formData.get("observacoes")?.toString().trim() || null;
-
-  const valorStone = numeroOuZero(formData.get("valor_maquineta_stone"));
-  const valorPagSeguro = numeroOuZero(formData.get("valor_maquineta_pagseguro"));
-  const valorDinheiro = numeroOuZero(formData.get("valor_dinheiro"));
-  const valorDeposito = numeroOuZero(formData.get("valor_deposito"));
+  const valores = lerValoresFechamento(formData);
 
   if (!caixaId) comErro("Caixa inválido.");
-  if (
-    valorStone === null ||
-    valorPagSeguro === null ||
-    valorDinheiro === null ||
-    valorDeposito === null ||
-    valorStone < 0 ||
-    valorPagSeguro < 0 ||
-    valorDinheiro < 0 ||
-    valorDeposito < 0
-  ) {
-    comErro("Preencha os 4 valores de fechamento corretamente.");
+  if (!valores) {
+    comErro("Preencha os 5 valores de fechamento corretamente.");
   }
 
-  const valorContado = valorStone + valorPagSeguro + valorDinheiro + valorDeposito;
+  const valorContado = somar(valores);
 
   const supabase = await createClient();
 
@@ -211,10 +218,7 @@ export async function fecharCaixa(formData) {
       fechado_por: user?.id ?? null,
       fechado_em: new Date().toISOString(),
       valor_contado: valorContado,
-      valor_maquineta_stone: valorStone,
-      valor_maquineta_pagseguro: valorPagSeguro,
-      valor_dinheiro: valorDinheiro,
-      valor_deposito: valorDeposito,
+      ...valores,
       status_aprovacao: "pendente",
       aprovado_por: null,
       aprovado_em: null,
@@ -231,11 +235,7 @@ export async function fecharCaixa(formData) {
     );
   }
 
-  const resumoFormas =
-    `Maquineta Stone: R$ ${valorStone.toFixed(2).replace(".", ",")} · ` +
-    `Maquineta PagSeguro: R$ ${valorPagSeguro.toFixed(2).replace(".", ",")} · ` +
-    `Dinheiro: R$ ${valorDinheiro.toFixed(2).replace(".", ",")} · ` +
-    `Depósito: R$ ${valorDeposito.toFixed(2).replace(".", ",")}`;
+  const resumoFormas = resumoDasFormas(valores);
 
   await registrarAuditoria(
     "caixa.fechar",

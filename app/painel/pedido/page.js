@@ -37,9 +37,9 @@ export default async function PedidoPage() {
 
   const { data: produtos } = await supabase
     .from("produtos")
-    .select("id, nome, descricao, preco, imagem, categoria_id, disponivel")
+    .select("id, codigo, nome, descricao, preco, imagem, categoria_id, disponivel")
     .eq("disponivel", true)
-    .order("nome", { ascending: true });
+    .order("codigo", { ascending: true });
 
   const { data: adicionais } = await supabase
     .from("adicionais")

@@ -9,6 +9,7 @@ import {
   apagarCategoria,
 } from "./actions";
 import BotaoApagar from "@/components/BotaoApagar";
+import CampoFoto from "@/components/CampoFoto";
 
 const campoClasse =
   "mt-1 w-full rounded-lg border border-[#dcdfd2] px-3 py-2 text-sm text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]";
@@ -54,7 +55,15 @@ export default async function ProdutosPage({ searchParams }) {
     .select(
       "id, codigo, nome, descricao, preco, custo, imagem, disponivel, categoria_id"
     )
-    .order("nome", { ascending: true });
+    .order("codigo", { ascending: true });
+
+  // Sugestão de código para o próximo produto: maior código numérico + 1,
+  // com 4 dígitos (0001, 0002, ...).
+  const maiorCodigo = (produtos ?? []).reduce((maior, p) => {
+    const n = /^[0-9]+$/.test(p.codigo ?? "") ? Number(p.codigo) : 0;
+    return Math.max(maior, n);
+  }, 0);
+  const proximoCodigo = String(maiorCodigo + 1).padStart(4, "0");
 
   const formatoMoeda = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -190,14 +199,20 @@ export default async function ProdutosPage({ searchParams }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[#1c2a1f]">
-                    Código (SKU, opcional)
+                    Código
                   </label>
                   <input
                     type="text"
                     name="codigo"
+                    required
+                    defaultValue={proximoCodigo}
+                    autoComplete="off"
                     className={campoClasse}
-                    placeholder="Ex: PAST-001"
+                    placeholder="Ex: 0001"
                   />
+                  <p className="mt-1 text-xs text-[#8b968a]">
+                    Já vem com o próximo número livre. Não pode repetir.
+                  </p>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-[#1c2a1f]">
@@ -214,12 +229,7 @@ export default async function ProdutosPage({ searchParams }) {
                   <label className="block text-sm font-medium text-[#1c2a1f]">
                     Foto do produto (opcional)
                   </label>
-                  <input
-                    type="file"
-                    name="imagem_arquivo"
-                    accept="image/*"
-                    className={campoClasse}
-                  />
+                  <CampoFoto name="imagem_arquivo" className={campoClasse} />
                   <p className="mt-1 text-xs text-[#8b968a]">
                     Se não enviar uma foto, o produto aparece com um emoji no
                     lugar da imagem.
@@ -279,26 +289,24 @@ export default async function ProdutosPage({ searchParams }) {
                       return (
                         <div key={produto.id} className="bg-white p-3">
                           <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-3">
                               {temFoto ? (
                                 <img
                                   src={produto.imagem}
                                   alt={produto.nome}
-                                  className="h-10 w-10 rounded-lg object-cover"
+                                  className="h-20 w-20 shrink-0 rounded-xl object-cover sm:h-24 sm:w-24"
                                 />
                               ) : (
-                                <span className="text-xl">
+                                <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-[#f6f4ee] text-4xl sm:h-24 sm:w-24">
                                   {produto.imagem || "🍽️"}
                                 </span>
                               )}
                               <div>
+                                <p className="font-mono text-xs font-semibold text-[#5b6b5c]">
+                                  Código {produto.codigo}
+                                </p>
                                 <p className="text-sm font-semibold text-[#1c2a1f]">
                                   {produto.nome}
-                                  {produto.codigo && (
-                                    <span className="ml-1.5 rounded bg-[#eceae0] px-1.5 py-0.5 text-[10px] font-mono font-normal text-[#5b6b5c]">
-                                      {produto.codigo}
-                                    </span>
-                                  )}
                                 </p>
                                 {produto.descricao && (
                                   <p className="text-xs text-[#8b968a]">
@@ -401,14 +409,16 @@ export default async function ProdutosPage({ searchParams }) {
                                 </div>
                                 <div>
                                   <label className="block text-xs font-medium text-[#1c2a1f]">
-                                    Código (SKU)
+                                    Código
                                   </label>
                                   <input
                                     type="text"
                                     name="codigo"
+                                    required
                                     defaultValue={produto.codigo ?? ""}
+                                    autoComplete="off"
                                     className={campoClasse}
-                                    placeholder="Ex: PAST-001"
+                                    placeholder="Ex: 0001"
                                   />
                                 </div>
                               </div>
@@ -428,10 +438,9 @@ export default async function ProdutosPage({ searchParams }) {
                                 <label className="block text-xs font-medium text-[#1c2a1f]">
                                   {temFoto ? "Trocar foto" : "Adicionar foto"}
                                 </label>
-                                <input
-                                  type="file"
+                                <CampoFoto
                                   name="imagem_arquivo"
-                                  accept="image/*"
+                                  fotoAtual={temFoto ? produto.imagem : null}
                                   className={campoClasse}
                                 />
                               </div>

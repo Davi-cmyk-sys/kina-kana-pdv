@@ -12,6 +12,26 @@ function comSucesso(mensagem) {
   redirect("/painel/produtos?sucesso=" + encodeURIComponent(mensagem));
 }
 
+// Todo produto tem código. Código só com números ganha zeros à esquerda até
+// 4 dígitos ("7" vira "0007"), para ficar no padrão 0001, 0002, ...
+function normalizarCodigo(texto) {
+  const codigo = (texto ?? "").toString().trim().toUpperCase();
+  if (/^[0-9]{1,3}$/.test(codigo)) {
+    return codigo.padStart(4, "0");
+  }
+  return codigo;
+}
+
+function mensagemErroProduto(error, codigo, acao) {
+  if (error.code === "42501") {
+    return `Só uma conta master pode ${acao} produtos.`;
+  }
+  if (error.code === "23505") {
+    return `Já existe outro produto com o código ${codigo}. Use outro código.`;
+  }
+  return error.message;
+}
+
 // Extensão a partir do tipo do arquivo (mais confiável que o nome, que o
 // navegador às vezes manda sem extensão em fotos tiradas pelo celular).
 function extensaoDaImagem(arquivo) {
@@ -90,7 +110,7 @@ export async function criarProduto(formData) {
   const categoriaId = formData.get("categoria_id")?.toString();
   const nome = formData.get("nome")?.toString().trim();
   const descricao = formData.get("descricao")?.toString().trim() || null;
-  const codigo = formData.get("codigo")?.toString().trim() || null;
+  const codigo = normalizarCodigo(formData.get("codigo"));
   const precoTexto = formData.get("preco")?.toString().replace(",", ".");
   const custoTexto = formData.get("custo")?.toString().replace(",", ".");
   const arquivoImagem = formData.get("imagem_arquivo");
@@ -100,6 +120,10 @@ export async function criarProduto(formData) {
 
   if (!categoriaId || !nome || !precoTexto || Number.isNaN(preco)) {
     comErro("Preencha categoria, nome e preço corretamente.");
+  }
+
+  if (!codigo) {
+    comErro("Todo produto precisa de um código (ex: 0001).");
   }
 
   if (Number.isNaN(custo)) {
@@ -122,11 +146,7 @@ export async function criarProduto(formData) {
     .single();
 
   if (error) {
-    comErro(
-      error.code === "42501"
-        ? "Só admin ou gerente podem cadastrar produtos."
-        : error.message
-    );
+    comErro(mensagemErroProduto(error, codigo, "cadastrar"));
   }
 
   // Se veio uma foto, envia agora que já temos o id do produto. Se a foto
@@ -152,7 +172,7 @@ export async function editarProduto(formData) {
   const nomeNovo = formData.get("nome")?.toString().trim();
   const nome = nomeNovo || formData.get("nome_atual")?.toString() || `#${id}`;
   const descricao = formData.get("descricao")?.toString().trim() || null;
-  const codigo = formData.get("codigo")?.toString().trim() || null;
+  const codigo = normalizarCodigo(formData.get("codigo"));
   const precoTexto = formData.get("preco")?.toString().replace(",", ".");
   const custoTexto = formData.get("custo")?.toString().replace(",", ".");
   const arquivoImagem = formData.get("imagem_arquivo");
@@ -164,6 +184,10 @@ export async function editarProduto(formData) {
 
   if (!categoriaId || !nomeNovo || !precoTexto) {
     comErro("Preencha categoria, nome e preço corretamente.");
+  }
+
+  if (!codigo) {
+    comErro("Todo produto precisa de um código (ex: 0001).");
   }
 
   const preco = Number(precoTexto);
@@ -203,11 +227,7 @@ export async function editarProduto(formData) {
     .eq("id", id);
 
   if (error) {
-    comErro(
-      error.code === "42501"
-        ? "Só admin ou gerente podem editar produtos."
-        : error.message
-    );
+    comErro(mensagemErroProduto(error, codigo, "editar"));
   }
 
   await registrarAuditoria("produto.editar", `Editou o produto "${nome}".`);

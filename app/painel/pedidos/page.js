@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { nomeDaForma } from "@/lib/formasPagamento";
 import { temAcesso } from "@/lib/permissoes";
 import { apagarPedido } from "./actions";
 import BotaoApagar from "@/components/BotaoApagar";
@@ -19,15 +20,6 @@ const CORES_STATUS = {
   pago: "bg-[#e7f2ea] text-[#1f6f3e]",
 };
 
-const NOMES_FORMA = {
-  dinheiro: "Dinheiro",
-  pix: "Pix",
-  credito: "Cartão de crédito",
-  debito: "Cartão de débito",
-  vale_refeicao: "Vale-refeição",
-  vale_alimentacao: "Vale-alimentação",
-  outros: "Outros",
-};
 
 export default async function PedidosPage({ searchParams }) {
   const params = await searchParams;
@@ -214,7 +206,7 @@ export default async function PedidosPage({ searchParams }) {
                       {pagamentosDoPedido.map((p, idx) => (
                         <p key={idx} className="text-xs text-[#1f6f3e]">
                           ✓ {formatoMoeda.format(p.valor)} —{" "}
-                          {NOMES_FORMA[p.forma] ?? p.forma}
+                          {nomeDaForma(p.forma)}
                           {p.troco > 0 &&
                             ` (troco ${formatoMoeda.format(p.troco)})`}
                         </p>

@@ -1,251 +1,156 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { SECOES_PAINEL } from "@/lib/secoesPainel";
-import { temAcesso } from "@/lib/permissoes";
-import NovoFuncionarioForm from "./NovoFuncionarioForm";
-import { editarFuncionario, apagarFuncionario } from "./actions";
-import BotaoApagar from "@/components/BotaoApagar";
+import Link from "next/link";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { formatarCpf, nomeDaFuncao } from "@/lib/colaboradores";
+import { exigirTelaColaboradores, linksDasFotos } from "./acesso";
 
-const NOMES_PAPEL = {
-  admin: "Administrador(a)",
-  gerente: "Gerente",
-  caixa: "Caixa",
-  cozinha: "Cozinha",
-  entregador: "Entregador(a)",
-  pendente: "Aguardando liberação",
-};
-
-const PAPEIS = [
-  { valor: "caixa", rotulo: "Caixa" },
-  { valor: "cozinha", rotulo: "Cozinha" },
-  { valor: "entregador", rotulo: "Entregador(a)" },
-  { valor: "gerente", rotulo: "Gerente" },
-  { valor: "admin", rotulo: "Administrador(a)" },
-  { valor: "pendente", rotulo: "Aguardando liberação" },
-];
-
-const campoClasse =
-  "mt-1 w-full rounded-lg border border-[#dcdfd2] px-3 py-2 text-sm text-[#1c2a1f] outline-none focus:border-[#1f6f3e] focus:ring-1 focus:ring-[#1f6f3e]";
-
-export default async function FuncionariosPage({ searchParams }) {
+export default async function ColaboradoresPage({ searchParams }) {
   const params = await searchParams;
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
+  const { supabase, user } = await exigirTelaColaboradores();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: colaboradores } = await supabase
+    .from("colaboradores")
+    .select(
+      "id, nome_completo, cpf, data_nascimento, funcoes, foto_caminho, perfil_id"
+    )
+    .order("nome_completo", { ascending: true });
 
-  if (!user) {
-    redirect("/login");
+  // Os usuários de login (perfis) são lidos com o cliente admin porque nem
+  // toda conta master consegue ler os perfis dos outros pelas regras do banco.
+  const idsPerfis = (colaboradores ?? [])
+    .map((c) => c.perfil_id)
+    .filter(Boolean);
+  let perfisPorId = {};
+  if (idsPerfis.length) {
+    const admin = createAdminClient();
+    const { data: perfis } = await admin
+      .from("perfis")
+      .select("id, nome, ativo, master")
+      .in("id", idsPerfis);
+    perfisPorId = Object.fromEntries((perfis ?? []).map((p) => [p.id, p]));
   }
 
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const podeAcessar = temAcesso("/painel/funcionarios", {
-    papel: meuPerfil?.papel,
-    master: meuPerfil?.master,
-    secoesBloqueadas: meuPerfil?.secoes_bloqueadas,
-  });
-
-  if (!podeAcessar) {
-    redirect("/painel");
-  }
-
-  const { data: funcionarios } = await supabase
-    .from("perfis")
-    .select("id, nome, papel, ativo, master, secoes_bloqueadas, criado_em")
-    .order("criado_em", { ascending: true });
-
-  // Lista de telas que dá pra personalizar por pessoa (Auditoria fica de
-  // fora — continua controlada só por quem é admin).
-  const secoesPersonalizaveis = SECOES_PAINEL.filter(
-    (s) => s.href !== "/painel/auditoria"
+  const fotos = await linksDasFotos(
+    supabase,
+    (colaboradores ?? []).map((c) => c.foto_caminho)
   );
 
   return (
-    <main className="mx-auto w-full max-w-2xl rounded-2xl border border-[#dcdfd2] bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-[#1c2a1f]">
-          Funcionários
-        </h1>
-        <p className="mt-1 text-sm text-[#5b6b5c]">
-          Cadastre aqui quem vai ter acesso ao sistema, e escolha o papel de
-          cada pessoa.
+    <main className="mx-auto w-full max-w-2xl rounded-2xl border border-[#dcdfd2] bg-white p-6 shadow-sm sm:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1c2a1f]">Colaboradores</h1>
+          <p className="mt-1 text-sm text-[#5b6b5c]">
+            Cadastro completo de quem trabalha na loja. Quem tiver acesso ao
+            sistema entra escolhendo o próprio usuário na tela de login.
+          </p>
+        </div>
+        <Link
+          href="/painel/funcionarios/novo"
+          className="rounded-lg bg-[#1f6f3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#195c33]"
+        >
+          + Novo colaborador
+        </Link>
+      </div>
+
+      {erro && (
+        <div className="mt-4 rounded-lg bg-[#fbeae6] p-3 text-sm text-[#8a3320]">
+          {erro}
+        </div>
+      )}
+      {sucesso && (
+        <div className="mt-4 rounded-lg bg-[#e7f2ea] p-3 text-sm text-[#1f6f3e]">
+          {sucesso}
+        </div>
+      )}
+
+      {!colaboradores?.length ? (
+        <p className="mt-6 text-sm text-[#8b968a]">
+          Nenhum colaborador cadastrado ainda.
         </p>
+      ) : (
+        <ul className="mt-6 divide-y divide-[#eceae0] overflow-hidden rounded-xl border border-[#dcdfd2]">
+          {colaboradores.map((c) => {
+            const perfil = c.perfil_id ? perfisPorId[c.perfil_id] : null;
+            const temAcessoAtivo = perfil?.ativo === true;
+            const incompleto = !c.cpf || !c.data_nascimento;
+            const foto = c.foto_caminho ? fotos[c.foto_caminho] : null;
+            const iniciais = c.nome_completo
+              .split(" ")
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((p) => p[0]?.toUpperCase())
+              .join("");
 
-        {erro && (
-          <div className="mt-4 rounded-lg bg-[#fbeae6] p-3 text-sm text-[#8a3320]">
-            {erro}
-          </div>
-        )}
-        {sucesso && (
-          <div className="mt-4 rounded-lg bg-[#e7f2ea] p-3 text-sm text-[#1f6f3e]">
-            {sucesso}
-          </div>
-        )}
-
-        <NovoFuncionarioForm />
-
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold text-[#1c2a1f]">
-            Contas cadastradas ({funcionarios?.length ?? 0})
-          </h2>
-
-          <div className="mt-3 divide-y divide-[#eceae0] overflow-hidden rounded-xl border border-[#dcdfd2]">
-            {funcionarios?.map((f) => (
-              <details key={f.id} className="bg-white p-3">
-                <summary className="flex cursor-pointer items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[#1c2a1f]">
-                      {f.nome}
-                      {f.master && (
-                        <span className="ml-2 rounded-full bg-[#1f6f3e]/10 px-2 py-0.5 text-xs font-semibold text-[#1f6f3e]">
-                          Master
+            return (
+              <li key={c.id}>
+                <Link
+                  href={`/painel/funcionarios/${c.id}`}
+                  className="flex items-center gap-3 p-3 transition hover:bg-[#f6f4ee]"
+                >
+                  {foto ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={foto}
+                      alt={c.nome_completo}
+                      className="h-14 w-14 shrink-0 rounded-full border border-[#dcdfd2] object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#1f6f3e]/10 text-lg font-bold text-[#1f6f3e]">
+                      {iniciais}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[#1c2a1f]">
+                      {c.nome_completo}
+                      {perfil?.id === user.id && (
+                        <span className="ml-1 font-normal text-[#8b968a]">
+                          (você)
                         </span>
                       )}
                     </p>
-                    <p className="text-xs text-[#8b968a]">
-                      {NOMES_PAPEL[f.papel] ?? f.papel}
-                    </p>
-                  </div>
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                      f.ativo
-                        ? "bg-[#e7f2ea] text-[#1f6f3e]"
-                        : "bg-[#f0f0ea] text-[#8b968a]"
-                    }`}
-                  >
-                    {f.ativo ? "Ativo" : "Inativo"}
-                  </span>
-                </summary>
-
-                <form
-                  action={editarFuncionario}
-                  className="mt-3 grid gap-3 border-t border-[#eceae0] pt-3 sm:grid-cols-2"
-                >
-                  <input type="hidden" name="id" value={f.id} />
-                  <div>
-                    <label className="block text-xs font-medium text-[#1c2a1f]">
-                      Nome
-                    </label>
-                    <input
-                      type="text"
-                      name="nome"
-                      required
-                      defaultValue={f.nome}
-                      className={campoClasse}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[#1c2a1f]">
-                      Papel
-                    </label>
-                    <select
-                      name="papel"
-                      defaultValue={f.papel}
-                      className={campoClasse}
-                    >
-                      {PAPEIS.map((p) => (
-                        <option key={p.valor} value={p.valor}>
-                          {p.rotulo}
-                        </option>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {(c.funcoes ?? []).map((f) => (
+                        <span
+                          key={f}
+                          className="rounded-full bg-[#eceae0] px-2 py-0.5 text-[11px] font-medium text-[#5b6b5c]"
+                        >
+                          {nomeDaFuncao(f)}
+                        </span>
                       ))}
-                    </select>
-                  </div>
-                  {meuPerfil?.master && (
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-[#1c2a1f]">
-                        Nova senha
-                      </label>
-                      <input
-                        type="text"
-                        name="novaSenha"
-                        minLength={6}
-                        autoComplete="off"
-                        className={campoClasse}
-                        placeholder="deixe em branco para manter a senha atual"
-                      />
+                      {perfil?.master && (
+                        <span className="rounded-full bg-[#fdf3e0] px-2 py-0.5 text-[11px] font-medium text-[#7a5b16]">
+                          Master
+                        </span>
+                      )}
+                      {incompleto && (
+                        <span className="rounded-full bg-[#fbeae6] px-2 py-0.5 text-[11px] font-medium text-[#8a3320]">
+                          Cadastro incompleto
+                        </span>
+                      )}
                     </div>
-                  )}
-                  <label className="flex items-center gap-2 text-sm text-[#1c2a1f] sm:col-span-2">
-                    <input
-                      type="checkbox"
-                      name="ativo"
-                      defaultChecked={f.ativo}
-                    />
-                    Conta ativa (desmarque para bloquear o acesso sem apagar
-                    a conta)
-                  </label>
-
-                  <div className="rounded-lg border border-[#dcdfd2] bg-white p-3 sm:col-span-2">
-                    <p className="text-sm font-medium text-[#1c2a1f]">
-                      Marque as telas que essa pessoa NÃO pode acessar
-                    </p>
                     <p className="mt-1 text-xs text-[#8b968a]">
-                      Deixe tudo desmarcado para usar o acesso normal do
-                      papel dela. Marque, por exemplo, "Relatórios" para
-                      esconder o lucro da loja dessa pessoa.
+                      {c.cpf ? `CPF ${formatarCpf(c.cpf)} · ` : ""}
+                      {temAcessoAtivo ? (
+                        <span className="text-[#1f6f3e]">
+                          Acesso ao sistema: {perfil.nome}
+                        </span>
+                      ) : (
+                        "Sem acesso ao sistema"
+                      )}
                     </p>
-                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
-                      {secoesPersonalizaveis
-                        .filter(
-                          (s) =>
-                            !(f.id === user.id && s.href === "/painel/funcionarios")
-                        )
-                        .map((s) => (
-                          <label
-                            key={s.href}
-                            className="flex items-center gap-1.5 text-xs text-[#1c2a1f]"
-                          >
-                            <input
-                              type="checkbox"
-                              name="secoesBloqueadas"
-                              value={s.href}
-                              defaultChecked={f.secoes_bloqueadas?.includes(
-                                s.href
-                              )}
-                            />
-                            {s.icone} {s.label}
-                          </label>
-                        ))}
-                    </div>
-                    {f.id === user.id && (
-                      <p className="mt-1 text-[10px] text-[#8b968a]">
-                        Você não pode bloquear "Funcionários" para si
-                        mesmo(a), pra não perder o acesso a essa tela.
-                      </p>
-                    )}
                   </div>
-
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-[#1f6f3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#195c33] sm:col-span-2 sm:w-auto"
-                  >
-                    Salvar
-                  </button>
-                </form>
-
-                {f.id !== user.id && (
-                  <div className="mt-3 border-t border-[#eceae0] pt-3">
-                    <BotaoApagar
-                      acao={apagarFuncionario}
-                      campos={{ id: f.id, nome: f.nome }}
-                      confirmacao={`Apagar a conta de "${f.nome}"? Essa pessoa perde o acesso ao sistema imediatamente e não é possível desfazer.`}
-                      className="text-xs font-medium text-[#b3432f] hover:underline"
-                      texto="Excluir esta conta"
-                    />
-                  </div>
-                )}
-              </details>
-            ))}
-          </div>
-        </div>
-      </main>
+                  <span aria-hidden="true" className="text-[#8b968a]">
+                    ›
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </main>
   );
 }

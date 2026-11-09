@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import {
   FORMAS_PAGAMENTO,
   FORMAS_VALIDAS,
@@ -144,21 +144,11 @@ export default async function CaixaPage({ searchParams }) {
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeVender = temAcesso("/painel/caixa", {
     master: meuPerfil?.master,
@@ -170,33 +160,39 @@ export default async function CaixaPage({ searchParams }) {
     redirect("/painel");
   }
 
-  const { data: caixas } = await supabase
-    .from("caixas")
-    .select(
-      "id, aberto_em, valor_abertura, fechado_em, fechado_por, valor_contado, valor_dinheiro, valor_pix_maquineta, valor_credito, valor_debito, valor_pix_conta, valor_maquineta_stone, valor_maquineta_pagseguro, valor_deposito, status_aprovacao, aprovado_em, observacao_aprovacao, observacoes"
-    )
-    .order("aberto_em", { ascending: false });
+  // Consultas independentes saem todas ao mesmo tempo (uma ida ao banco
+  // em vez de várias seguidas).
+  const [
+    { data: caixas },
+    { data: pagamentos },
+    { data: pedidos },
+    { data: itensPedido },
+    { data: movimentacoes },
+  ] = await Promise.all([
+    supabase
+      .from("caixas")
+      .select(
+        "id, aberto_em, valor_abertura, fechado_em, fechado_por, valor_contado, valor_dinheiro, valor_pix_maquineta, valor_credito, valor_debito, valor_pix_conta, valor_maquineta_stone, valor_maquineta_pagseguro, valor_deposito, status_aprovacao, aprovado_em, observacao_aprovacao, observacoes"
+      )
+      .order("aberto_em", { ascending: false }),
+    supabase
+      .from("pagamentos")
+      .select("pedido_id, forma, valor, criado_em"),
+    supabase
+      .from("pedidos")
+      .select("id, numero_senha, subtotal, desconto, total, pago_em")
+      .eq("status", "pago"),
+    supabase
+      .from("itens_pedido")
+      .select("pedido_id, nome_snapshot, quantidade"),
+    supabase
+      .from("movimentacoes_caixa")
+      .select("id, caixa_id, tipo, valor, motivo, criado_em")
+      .order("criado_em", { ascending: false }),
+  ]);
 
   const caixaAberto = (caixas ?? []).find((c) => !c.fechado_em) ?? null;
   const caixasFechados = (caixas ?? []).filter((c) => c.fechado_em);
-
-  const { data: pagamentos } = await supabase
-    .from("pagamentos")
-    .select("pedido_id, forma, valor, criado_em");
-
-  const { data: pedidos } = await supabase
-    .from("pedidos")
-    .select("id, numero_senha, subtotal, desconto, total, pago_em")
-    .eq("status", "pago");
-
-  const { data: itensPedido } = await supabase
-    .from("itens_pedido")
-    .select("pedido_id, nome_snapshot, quantidade");
-
-  const { data: movimentacoes } = await supabase
-    .from("movimentacoes_caixa")
-    .select("id, caixa_id, tipo, valor, motivo, criado_em")
-    .order("criado_em", { ascending: false });
 
   const formatoMoeda = new Intl.NumberFormat("pt-BR", {
     style: "currency",

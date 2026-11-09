@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { temAcesso } from "@/lib/permissoes";
 import {
   criarIngrediente,
@@ -26,21 +26,11 @@ export default async function EstoquePage({ searchParams }) {
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeGerenciar = temAcesso("/painel/estoque", {
     papel: meuPerfil?.papel,
@@ -52,41 +42,47 @@ export default async function EstoquePage({ searchParams }) {
     redirect("/painel");
   }
 
-  const { data: ingredientes } = await supabase
-    .from("ingredientes")
-    .select("id, nome, unidade, quantidade_atual, quantidade_minima")
-    .order("nome", { ascending: true });
-
-  const { data: produtos } = await supabase
-    .from("produtos")
-    .select("id, nome")
-    .order("nome", { ascending: true });
-
-  const { data: fichaTecnica } = await supabase
-    .from("produto_ingredientes")
-    .select("id, produto_id, ingrediente_id, quantidade_por_unidade");
-
-  const { data: movimentacoes } = await supabase
-    .from("movimentacoes_estoque")
-    .select("id, ingrediente_id, tipo, quantidade, motivo, criado_em")
-    .order("criado_em", { ascending: false })
-    .limit(20);
-
-  // Pra itens como Caldo de Cana e Frozen, o estoque não dá pra bater
-  // certinho (não é unitário, é "por média" — compra em saca/kg, vende
-  // em copo). Em vez de tentar uma baixa exata, aqui a gente só compara
-  // o total comprado (kg/L, todas as entradas já registradas) com o
-  // total vendido (copos/unidades) de cada produto ligado àquele
-  // ingrediente na ficha técnica — serve de conferência de rendimento.
-  const { data: entradasTotais } = await supabase
-    .from("movimentacoes_estoque")
-    .select("ingrediente_id, quantidade")
-    .eq("tipo", "entrada");
-
-  const { data: itensVendidos } = await supabase
-    .from("itens_pedido")
-    .select("produto_id, quantidade")
-    .not("produto_id", "is", null);
+  // Consultas independentes saem todas ao mesmo tempo (uma ida ao banco
+  // em vez de várias seguidas).
+  const [
+    { data: ingredientes },
+    { data: produtos },
+    { data: fichaTecnica },
+    { data: movimentacoes },
+    { data: entradasTotais },
+    { data: itensVendidos },
+  ] = await Promise.all([
+    supabase
+      .from("ingredientes")
+      .select("id, nome, unidade, quantidade_atual, quantidade_minima")
+      .order("nome", { ascending: true }),
+    supabase
+      .from("produtos")
+      .select("id, nome")
+      .order("nome", { ascending: true }),
+    supabase
+      .from("produto_ingredientes")
+      .select("id, produto_id, ingrediente_id, quantidade_por_unidade"),
+    supabase
+      .from("movimentacoes_estoque")
+      .select("id, ingrediente_id, tipo, quantidade, motivo, criado_em")
+      .order("criado_em", { ascending: false })
+      .limit(20),
+    // Pra itens como Caldo de Cana e Frozen, o estoque não dá pra bater
+    // certinho (não é unitário, é "por média" — compra em saca/kg, vende
+    // em copo). Em vez de tentar uma baixa exata, aqui a gente só compara
+    // o total comprado (kg/L, todas as entradas já registradas) com o
+    // total vendido (copos/unidades) de cada produto ligado àquele
+    // ingrediente na ficha técnica — serve de conferência de rendimento.
+    supabase
+      .from("movimentacoes_estoque")
+      .select("ingrediente_id, quantidade")
+      .eq("tipo", "entrada"),
+    supabase
+      .from("itens_pedido")
+      .select("produto_id, quantidade")
+      .not("produto_id", "is", null),
+  ]);
 
   const mapaIngredientes = new Map((ingredientes ?? []).map((i) => [i.id, i]));
   const mapaProdutos = new Map((produtos ?? []).map((p) => [p.id, p]));

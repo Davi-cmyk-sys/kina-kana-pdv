@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { temAcesso } from "@/lib/permissoes";
 import {
   criarCategoria,
@@ -19,21 +19,11 @@ export default async function ProdutosPage({ searchParams }) {
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeGerenciar = temAcesso("/painel/produtos", {
     papel: meuPerfil?.papel,
@@ -45,17 +35,23 @@ export default async function ProdutosPage({ searchParams }) {
     redirect("/painel");
   }
 
-  const { data: categorias } = await supabase
-    .from("categorias")
-    .select("id, nome, icone, ordem")
-    .order("ordem", { ascending: true });
-
-  const { data: produtos } = await supabase
-    .from("produtos")
-    .select(
-      "id, codigo, nome, descricao, preco, custo, imagem, disponivel, categoria_id"
-    )
-    .order("codigo", { ascending: true });
+  // Consultas independentes saem todas ao mesmo tempo (uma ida ao banco
+  // em vez de várias seguidas).
+  const [
+    { data: categorias },
+    { data: produtos },
+  ] = await Promise.all([
+    supabase
+      .from("categorias")
+      .select("id, nome, icone, ordem")
+      .order("ordem", { ascending: true }),
+    supabase
+      .from("produtos")
+      .select(
+        "id, codigo, nome, descricao, preco, custo, imagem, disponivel, categoria_id"
+      )
+      .order("codigo", { ascending: true }),
+  ]);
 
   // Sugestão de código para o próximo produto: maior código numérico + 1,
   // com 4 dígitos (0001, 0002, ...).

@@ -1,24 +1,14 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { temAcesso } from "@/lib/permissoes";
 import ConfiguracaoImpressora from "./ConfiguracaoImpressora";
 
 export default async function ImpressoraPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeVender = temAcesso("/painel/impressora", {
     papel: meuPerfil?.papel,

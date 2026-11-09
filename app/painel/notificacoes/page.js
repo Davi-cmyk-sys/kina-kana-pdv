@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import {
   marcarNotificacaoLida,
   marcarTodasLidas,
@@ -19,21 +19,11 @@ export default async function NotificacoesPage({ searchParams }) {
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("master")
-    .eq("id", user.id)
-    .maybeSingle();
 
   if (meuPerfil?.master !== true) {
     redirect("/painel");

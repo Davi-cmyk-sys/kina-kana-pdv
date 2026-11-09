@@ -1,24 +1,14 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { temAcesso } from "@/lib/permissoes";
 import NovoPedido from "./NovoPedido";
 
 export default async function PedidoPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeVender = temAcesso("/painel/pedido", {
     papel: meuPerfil?.papel,
@@ -30,34 +20,40 @@ export default async function PedidoPage() {
     redirect("/painel");
   }
 
-  const { data: categorias } = await supabase
-    .from("categorias")
-    .select("id, nome, icone")
-    .order("ordem", { ascending: true });
-
-  const { data: produtos } = await supabase
-    .from("produtos")
-    .select("id, codigo, nome, descricao, preco, imagem, categoria_id, disponivel")
-    .eq("disponivel", true)
-    .order("codigo", { ascending: true });
-
-  const { data: adicionais } = await supabase
-    .from("adicionais")
-    .select("id, nome, preco, ativo")
-    .eq("ativo", true)
-    .order("nome", { ascending: true });
-
-  const { data: combosBrutos } = await supabase
-    .from("combos")
-    .select("id, nome, preco, imagem, ativo")
-    .eq("ativo", true)
-    .order("nome", { ascending: true });
-
-  const { data: itensCombo } = await supabase
-    .from("combo_itens")
-    .select(
-      "id, combo_id, quantidade, rotulo, produto_id, produtos(nome), categoria_id, categorias(nome, icone)"
-    );
+  // Consultas independentes saem todas ao mesmo tempo (uma ida ao banco
+  // em vez de várias seguidas).
+  const [
+    { data: categorias },
+    { data: produtos },
+    { data: adicionais },
+    { data: combosBrutos },
+    { data: itensCombo },
+  ] = await Promise.all([
+    supabase
+      .from("categorias")
+      .select("id, nome, icone")
+      .order("ordem", { ascending: true }),
+    supabase
+      .from("produtos")
+      .select("id, codigo, nome, descricao, preco, imagem, categoria_id, disponivel")
+      .eq("disponivel", true)
+      .order("codigo", { ascending: true }),
+    supabase
+      .from("adicionais")
+      .select("id, nome, preco, ativo")
+      .eq("ativo", true)
+      .order("nome", { ascending: true }),
+    supabase
+      .from("combos")
+      .select("id, nome, preco, imagem, ativo")
+      .eq("ativo", true)
+      .order("nome", { ascending: true }),
+    supabase
+      .from("combo_itens")
+      .select(
+        "id, combo_id, quantidade, rotulo, produto_id, produtos(nome), categoria_id, categorias(nome, icone)"
+      ),
+  ]);
 
   // Monta cada combo já com a lista dos itens dele (pra não precisar de
   // outra chamada ao banco no navegador).

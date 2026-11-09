@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { temAcesso } from "@/lib/permissoes";
 import SolicitarCompras from "./SolicitarCompras";
 import { atenderSolicitacaoCompra, cancelarSolicitacaoCompra } from "./actions";
@@ -21,21 +21,11 @@ export default async function ComprasPage({ searchParams }) {
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeAcessar = temAcesso("/painel/compras", {
     master: meuPerfil?.master,
@@ -48,16 +38,22 @@ export default async function ComprasPage({ searchParams }) {
 
   const podeGerenciar = meuPerfil?.master === true;
 
-  const { data: ingredientes } = await supabase
-    .from("ingredientes")
-    .select("nome")
-    .order("nome", { ascending: true });
-
-  const { data: solicitacoes } = await supabase
-    .from("solicitacoes_compra")
-    .select("id, itens, observacao, status, criado_em, perfis(nome)")
-    .order("criado_em", { ascending: false })
-    .limit(30);
+  // Consultas independentes saem todas ao mesmo tempo (uma ida ao banco
+  // em vez de várias seguidas).
+  const [
+    { data: ingredientes },
+    { data: solicitacoes },
+  ] = await Promise.all([
+    supabase
+      .from("ingredientes")
+      .select("nome")
+      .order("nome", { ascending: true }),
+    supabase
+      .from("solicitacoes_compra")
+      .select("id, itens, observacao, status, criado_em, perfis(nome)")
+      .order("criado_em", { ascending: false })
+      .limit(30),
+  ]);
 
   const formatoDataHora = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",

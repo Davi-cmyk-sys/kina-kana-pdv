@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { calcularAcessos } from "@/lib/permissoes";
 import PainelNav from "./PainelNav";
 import { sair } from "./actions";
@@ -15,21 +15,11 @@ const NOMES_PAPEL = {
 };
 
 export default async function PainelLayout({ children }) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: perfil } = await supabase
-    .from("perfis")
-    .select("nome, papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const papel = perfil?.papel ?? "pendente";
   const souMaster = perfil?.master === true;

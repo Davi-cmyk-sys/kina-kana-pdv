@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 
 function paraISO(data) {
   return data.toISOString().slice(0, 10);
@@ -28,21 +28,11 @@ const ROTULOS_ACAO = {
 export default async function AuditoriaPage({ searchParams }) {
   const params = await searchParams;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel")
-    .eq("id", user.id)
-    .maybeSingle();
 
   if (meuPerfil?.papel !== "admin") {
     redirect("/painel");

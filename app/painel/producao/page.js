@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { temAcesso } from "@/lib/permissoes";
 import { registrarProducao } from "./actions";
 
@@ -11,21 +11,11 @@ export default async function ProducaoPage({ searchParams }) {
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeAcessar = temAcesso("/painel/producao", {
     master: meuPerfil?.master,
@@ -36,20 +26,26 @@ export default async function ProducaoPage({ searchParams }) {
     redirect("/painel");
   }
 
-  const { data: produtos } = await supabase
-    .from("produtos")
-    .select("id, nome, imagem, disponivel")
-    .eq("disponivel", true)
-    .order("nome", { ascending: true });
-
   const inicioDoDia = new Date();
   inicioDoDia.setHours(0, 0, 0, 0);
 
-  const { data: producoesHoje } = await supabase
-    .from("producao_cozinha")
-    .select("id, quantidade, criado_em, produtos(nome), perfis(nome)")
-    .gte("criado_em", inicioDoDia.toISOString())
-    .order("criado_em", { ascending: false });
+  // Consultas independentes saem todas ao mesmo tempo (uma ida ao banco
+  // em vez de várias seguidas).
+  const [
+    { data: produtos },
+    { data: producoesHoje },
+  ] = await Promise.all([
+    supabase
+      .from("produtos")
+      .select("id, nome, imagem, disponivel")
+      .eq("disponivel", true)
+      .order("nome", { ascending: true }),
+    supabase
+      .from("producao_cozinha")
+      .select("id, quantidade, criado_em, produtos(nome), perfis(nome)")
+      .gte("criado_em", inicioDoDia.toISOString())
+      .order("criado_em", { ascending: false }),
+  ]);
 
   const totalPorProduto = {};
   for (const p of producoesHoje ?? []) {

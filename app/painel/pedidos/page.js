@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { nomeDaForma } from "@/lib/formasPagamento";
 import { temAcesso } from "@/lib/permissoes";
 import { apagarPedido } from "./actions";
@@ -26,21 +26,11 @@ export default async function PedidosPage({ searchParams }) {
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeVender = temAcesso("/painel/pedidos", {
     papel: meuPerfil?.papel,
@@ -53,27 +43,33 @@ export default async function PedidosPage({ searchParams }) {
     redirect("/painel");
   }
 
-  const { data: pedidos } = await supabase
-    .from("pedidos")
-    .select(
-      "id, numero_senha, data_referencia, status, subtotal, desconto, desconto_motivo, total, criado_em"
-    )
-    .order("criado_em", { ascending: false });
-
-  const { data: itens } = await supabase
-    .from("itens_pedido")
-    .select(
-      "id, pedido_id, nome_snapshot, quantidade, preco_unitario, combo_escolhas"
-    );
-
-  const { data: adicionaisDosItens } = await supabase
-    .from("item_adicionais")
-    .select("item_pedido_id, nome_snapshot, preco_unitario, quantidade");
-
-  const { data: pagamentos } = await supabase
-    .from("pagamentos")
-    .select("pedido_id, forma, valor, troco, criado_em")
-    .order("criado_em", { ascending: true });
+  // Consultas independentes saem todas ao mesmo tempo (uma ida ao banco
+  // em vez de várias seguidas).
+  const [
+    { data: pedidos },
+    { data: itens },
+    { data: adicionaisDosItens },
+    { data: pagamentos },
+  ] = await Promise.all([
+    supabase
+      .from("pedidos")
+      .select(
+        "id, numero_senha, data_referencia, status, subtotal, desconto, desconto_motivo, total, criado_em"
+      )
+      .order("criado_em", { ascending: false }),
+    supabase
+      .from("itens_pedido")
+      .select(
+        "id, pedido_id, nome_snapshot, quantidade, preco_unitario, combo_escolhas"
+      ),
+    supabase
+      .from("item_adicionais")
+      .select("item_pedido_id, nome_snapshot, preco_unitario, quantidade"),
+    supabase
+      .from("pagamentos")
+      .select("pedido_id, forma, valor, troco, criado_em")
+      .order("criado_em", { ascending: true }),
+  ]);
 
   const formatoMoeda = new Intl.NumberFormat("pt-BR", {
     style: "currency",

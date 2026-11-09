@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { temAcesso } from "@/lib/permissoes";
 import {
   criarAdicional,
@@ -19,21 +19,11 @@ export default async function CombosPage({ searchParams }) {
   const erro = typeof params?.erro === "string" ? params.erro : null;
   const sucesso = typeof params?.sucesso === "string" ? params.sucesso : null;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeGerenciar = temAcesso("/painel/combos", {
     papel: meuPerfil?.papel,
@@ -45,32 +35,38 @@ export default async function CombosPage({ searchParams }) {
     redirect("/painel");
   }
 
-  const { data: categorias } = await supabase
-    .from("categorias")
-    .select("id, nome, icone")
-    .order("ordem", { ascending: true });
-
-  const { data: produtos } = await supabase
-    .from("produtos")
-    .select("id, nome, categoria_id")
-    .order("nome", { ascending: true });
-
-  const { data: adicionais } = await supabase
-    .from("adicionais")
-    .select("id, nome, preco, ativo")
-    .order("nome", { ascending: true });
-
-  const { data: combos } = await supabase
-    .from("combos")
-    .select("id, nome, descricao, preco, custo, imagem, ativo")
-    .order("nome", { ascending: true });
-
-  const { data: itens } = await supabase
-    .from("combo_itens")
-    .select(
-      "id, combo_id, quantidade, rotulo, produtos(nome), categorias(nome, icone)"
-    )
-    .order("id", { ascending: true });
+  // Consultas independentes saem todas ao mesmo tempo (uma ida ao banco
+  // em vez de várias seguidas).
+  const [
+    { data: categorias },
+    { data: produtos },
+    { data: adicionais },
+    { data: combos },
+    { data: itens },
+  ] = await Promise.all([
+    supabase
+      .from("categorias")
+      .select("id, nome, icone")
+      .order("ordem", { ascending: true }),
+    supabase
+      .from("produtos")
+      .select("id, nome, categoria_id")
+      .order("nome", { ascending: true }),
+    supabase
+      .from("adicionais")
+      .select("id, nome, preco, ativo")
+      .order("nome", { ascending: true }),
+    supabase
+      .from("combos")
+      .select("id, nome, descricao, preco, custo, imagem, ativo")
+      .order("nome", { ascending: true }),
+    supabase
+      .from("combo_itens")
+      .select(
+        "id, combo_id, quantidade, rotulo, produtos(nome), categorias(nome, icone)"
+      )
+      .order("id", { ascending: true }),
+  ]);
 
   const formatoMoeda = new Intl.NumberFormat("pt-BR", {
     style: "currency",

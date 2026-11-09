@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { obterSessao } from "@/lib/sessao";
 import { nomeDaForma, ordemDaForma } from "@/lib/formasPagamento";
 import { temAcesso } from "@/lib/permissoes";
 import ExportarCsv from "./ExportarCsv";
@@ -13,21 +13,11 @@ function paraISO(data) {
 export default async function RelatoriosPage({ searchParams }) {
   const params = await searchParams;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, perfil: meuPerfil } = await obterSessao();
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: meuPerfil } = await supabase
-    .from("perfis")
-    .select("papel, master, secoes_bloqueadas")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const podeVerRelatorios = temAcesso("/painel/relatorios", {
     papel: meuPerfil?.papel,
